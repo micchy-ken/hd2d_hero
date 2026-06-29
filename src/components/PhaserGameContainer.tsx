@@ -152,14 +152,14 @@ export const PhaserGameContainer: React.FC = () => {
             className="w-full h-full"
           />
           {/* アクションログオーバーレイ (最新5件) */}
-          <div className="absolute bottom-2 right-2 w-64 pointer-events-none flex flex-col justify-end gap-1.5 z-10 p-2">
+          <div className="absolute bottom-2 right-2 w-64 pointer-events-none flex flex-col justify-end gap-1 z-10 p-2">
             {logs.slice(-5).map((log) => (
-              <div key={log.id} className={`animate-in fade-in slide-in-from-bottom-2 duration-300 text-[11px] p-2 rounded-md bg-black/70 backdrop-blur-sm border shadow-lg ${
-                log.type === 'damage' ? 'border-rose-500/50 text-rose-200' :
-                log.type === 'combat' ? 'border-amber-500/50 text-amber-200' :
-                log.type === 'system' ? 'border-sky-500/50 text-sky-200 font-medium' :
-                'border-white/20 text-white'
-              }`}>
+              <div key={log.id} className={`animate-in fade-in slide-in-from-bottom-2 duration-300 text-xs font-bold text-right drop-shadow-md ${
+                log.type === 'damage' ? 'text-rose-400' :
+                log.type === 'combat' ? 'text-amber-400' :
+                log.type === 'system' ? 'text-sky-300 font-extrabold' :
+                'text-white'
+              }`} style={{ textShadow: '1px 1px 2px rgba(0,0,0,0.8), -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000' }}>
                 {log.message}
               </div>
             ))}
