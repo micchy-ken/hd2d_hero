@@ -19,6 +19,7 @@ export const PhaserGameContainer: React.FC = () => {
 
   const [isRandomWalk, setIsRandomWalk] = useState<boolean>(true);
   const [showGrid, setShowGrid] = useState<boolean>(true);
+  const [isHd2d, setIsHd2d] = useState<boolean>(true);
   const [speed, setSpeed] = useState<number>(450);
   const [showSpritesheetModal, setShowSpritesheetModal] = useState<boolean>(false);
   const [spritesheetUrl, setSpritesheetUrl] = useState<string>('');
@@ -88,6 +89,12 @@ export const PhaserGameContainer: React.FC = () => {
     sceneRef.current?.toggleGridLines(nextVal);
   };
 
+  const toggleHd2d = () => {
+    const nextVal = !isHd2d;
+    setIsHd2d(nextVal);
+    sceneRef.current?.toggleHd2dEffects(nextVal);
+  };
+
   const handleSpeedChange = (newSpeed: number) => {
     setSpeed(newSpeed);
     sceneRef.current?.setSpeed(newSpeed);
@@ -114,7 +121,7 @@ export const PhaserGameContainer: React.FC = () => {
         <div className="flex items-center justify-between w-full mb-4 px-2">
           <div className="flex items-center gap-2">
             <span className="inline-block w-3 h-3 rounded-full bg-emerald-500 animate-pulse" />
-            <h2 className="text-lg font-semibold text-slate-800 tracking-tight">Phaser.js Stage (9x9 Grid)</h2>
+            <h2 className="text-lg font-semibold text-slate-800 tracking-tight">HD-2D Stage (9x9 Grid)</h2>
           </div>
           <div className="text-xs font-mono px-2.5 py-1 bg-slate-100 text-slate-600 rounded-md">
             576 × 576 px
@@ -255,7 +262,7 @@ export const PhaserGameContainer: React.FC = () => {
           </div>
 
           {/* ユーティリティボタン群 */}
-          <div className="grid grid-cols-3 gap-3 pt-2">
+          <div className="grid grid-cols-2 gap-3 pt-2">
             <button
               onClick={toggleGrid}
               className={`flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl border text-xs font-medium transition-colors ${
@@ -266,6 +273,18 @@ export const PhaserGameContainer: React.FC = () => {
             >
               <Grid className="w-3.5 h-3.5" />
               {showGrid ? 'Grid ON' : 'Grid OFF'}
+            </button>
+
+            <button
+              onClick={toggleHd2d}
+              className={`flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl border text-xs font-medium transition-colors ${
+                isHd2d 
+                  ? 'bg-amber-50 border-amber-300 text-amber-700 font-semibold' 
+                  : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+              {isHd2d ? 'HD-2D FX ON' : 'HD-2D FX OFF'}
             </button>
 
             <button

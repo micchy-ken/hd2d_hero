@@ -1,8 +1,7 @@
 import Phaser from 'phaser';
 
 /**
- * 勇者キャラクターの64x64px スプライトシート（横4コマ × 縦4方向 = 256x256px）を動的に生成し、
- * Phaserのテクスチャマネージャーに登録するヘルパー関数。
+ * 64x64pxのHD-2D風（精細ピクセルアート＋リッチシェーディング）勇者スプライトシートを動的生成。
  * 
  * 行の順番:
  * 0: Down (正面)
@@ -13,9 +12,8 @@ import Phaser from 'phaser';
 export function generateHeroSpritesheet(scene: Phaser.Scene): string {
   const textureKey = 'hero_spritesheet';
 
-  // すでにテクスチャが存在する場合は再生成しない
   if (scene.textures.exists(textureKey)) {
-    return textureKey;
+    scene.textures.remove(textureKey);
   }
 
   const frameWidth = 64;
@@ -28,34 +26,66 @@ export function generateHeroSpritesheet(scene: Phaser.Scene): string {
   canvas.height = frameHeight * rows;
   const ctx = canvas.getContext('2d')!;
 
-  // ピクセルアート風の描画設定
   ctx.imageSmoothingEnabled = false;
 
-  // カラーパレット
-  const colors = {
-    shadow: 'rgba(0, 0, 0, 0.3)',
-    skin: '#fcd3a1',
-    skinShadow: '#d9a066',
-    hair: '#8a4f27',
-    hairHighlight: '#b86f3d',
-    armorBlue: '#2563eb',
-    armorLightBlue: '#60a5fa',
-    armorDarkBlue: '#1e40af',
-    gold: '#f59e0b',
-    goldLight: '#fbbf24',
-    boots: '#654321',
-    capeRed: '#dc2626',
-    capeDarkRed: '#991b1b',
-    swordBlade: '#e2e8f0',
-    swordHilt: '#d97706',
-    shieldBase: '#cbd5e1',
-    shieldBorder: '#475569',
-    shieldCross: '#3b82f6',
-    white: '#ffffff',
-    black: '#1e293b'
+  // HD-2D用リッチカラーパレット（ハイライト・コア・シャドウの多層シェーディング）
+  const palette = {
+    skinHi: '#fff1e6',
+    skin: '#ffe0b2',
+    skinMid: '#f6b983',
+    skinShadow: '#c88051',
+
+    hairHi: '#ffe875',
+    hair: '#e6a817',
+    hairMid: '#ad7408',
+    hairDark: '#6b4402',
+
+    armorHi: '#8cd2ff',
+    armor: '#309bff',
+    armorMid: '#1468cc',
+    armorDark: '#083c85',
+    armorRim: '#b8e3ff',
+
+    goldHi: '#ffffff',
+    gold: '#ffd700',
+    goldMid: '#e69500',
+    goldDark: '#8c5200',
+
+    capeHi: '#ff7a7a',
+    cape: '#e62e2e',
+    capeMid: '#ab1111',
+    capeDark: '#660505',
+
+    swordHi: '#ffffff',
+    sword: '#e0f7ff',
+    swordMid: '#8fb8cc',
+    swordDark: '#385566',
+    swordGlow: 'rgba(140, 210, 255, 0.6)',
+
+    shieldBorderHi: '#e2e8f0',
+    shieldBorder: '#94a3b8',
+    shieldBorderDark: '#475569',
+    shieldBase: '#1e293b',
+    shieldEmblem: '#ffd700',
+
+    leatherHi: '#a87954',
+    leather: '#734d31',
+    leatherDark: '#3d2514',
+
+    shadowSoft: 'rgba(15, 23, 42, 0.45)',
+    glowCyan: 'rgba(56, 189, 248, 0.4)',
+    black: '#0f172a',
+    white: '#ffffff'
   };
 
-  // 各方向・各フレームを描画
+  /**
+   * ピクセル単位の矩形を描画するヘルパー
+   */
+  const p = (x: number, y: number, w: number, h: number, color: string) => {
+    ctx.fillStyle = color;
+    ctx.fillRect(Math.floor(x), Math.floor(y), Math.floor(w), Math.floor(h));
+  };
+
   for (let dir = 0; dir < rows; dir++) {
     for (let frame = 0; frame < cols; frame++) {
       const ox = frame * frameWidth;
@@ -64,222 +94,314 @@ export function generateHeroSpritesheet(scene: Phaser.Scene): string {
       ctx.save();
       ctx.translate(ox, oy);
 
-      // 歩行アニメーションのバウンス＆手足オフセット計算
-      // フレーム0, 2: 直立/通過, フレーム1, 3: 踏み出し(上下バウンスあり)
+      // 歩行アニメーションの上下バウンス＆体の傾き計算
       const isStep1 = frame === 1;
       const isStep2 = frame === 3;
-      const bobY = (isStep1 || isStep2) ? -2 : 0;
-      const legOffset = isStep1 ? 3 : (isStep2 ? -3 : 0);
+      const bobY = (isStep1 || isStep2) ? -3 : 0;
+      const swayX = isStep1 ? 1 : (isStep2 ? -1 : 0);
+      const legOffset = isStep1 ? 4 : (isStep2 ? -4 : 0);
 
-      // 1. 足元シャドウ
-      ctx.fillStyle = colors.shadow;
+      // 1. HD-2D風リッチソフトシャドウ（グラデーション楕円）
+      ctx.save();
+      const shadowGrad = ctx.createRadialGradient(32, 57, 2, 32, 57, 18);
+      shadowGrad.addColorStop(0, 'rgba(15, 23, 42, 0.55)');
+      shadowGrad.addColorStop(0.7, 'rgba(15, 23, 42, 0.2)');
+      shadowGrad.addColorStop(1, 'rgba(15, 23, 42, 0)');
+      ctx.fillStyle = shadowGrad;
       ctx.beginPath();
-      ctx.ellipse(32, 58, 14, 5, 0, 0, Math.PI * 2);
+      ctx.ellipse(32, 57, 18, 7, 0, 0, Math.PI * 2);
       ctx.fill();
+      ctx.restore();
 
-      // --- 方向別の描画 ---
+      // キャラクター全体をバウンスに合わせて移動
+      ctx.save();
+      ctx.translate(swayX, bobY);
+
       if (dir === 0) {
-        // 【DOWN: 正面】
-        // マント（後ろ側）
-        ctx.fillStyle = colors.capeDarkRed;
-        ctx.fillRect(20, 28 + bobY, 24, 22);
+        // ==========================================
+        // 【DOWN: 正面】 HD-2D 聖騎士勇者
+        // ==========================================
+        
+        // --- なびくマント（後ろ側） ---
+        p(18, 26, 28, 26, palette.capeDark);
+        p(20, 26, 24, 24, palette.capeMid);
+        p(22, 28, 20, 20, palette.cape);
 
-        // 足 (ブーツ)
-        ctx.fillStyle = colors.boots;
-        ctx.fillRect(24, 48 + bobY + (legOffset > 0 ? -2 : 0), 6, 10);
-        ctx.fillRect(34, 48 + bobY + (legOffset < 0 ? -2 : 0), 6, 10);
+        // --- 脚・ブーツ ---
+        // 左足
+        const leftLegY = 46 + (legOffset > 0 ? -2 : 0);
+        p(23, leftLegY, 7, 12, palette.armorDark);
+        p(24, leftLegY + 4, 6, 8, palette.leather);
+        p(24, leftLegY + 6, 5, 6, palette.leatherHi);
+        p(23, leftLegY + 10, 8, 3, palette.leatherDark); // ブーツつま先
 
-        // 体 (青い鎧)
-        ctx.fillStyle = colors.armorBlue;
-        ctx.fillRect(22, 30 + bobY, 20, 18);
-        ctx.fillStyle = colors.armorLightBlue;
-        ctx.fillRect(26, 32 + bobY, 12, 10);
-        // 金のベルト
-        ctx.fillStyle = colors.gold;
-        ctx.fillRect(22, 44 + bobY, 20, 4);
+        // 右足
+        const rightLegY = 46 + (legOffset < 0 ? -2 : 0);
+        p(34, rightLegY, 7, 12, palette.armorDark);
+        p(34, rightLegY + 4, 6, 8, palette.leather);
+        p(35, rightLegY + 6, 5, 6, palette.leatherHi);
+        p(33, rightLegY + 10, 8, 3, palette.leatherDark);
 
-        // 頭部ベース
-        ctx.fillStyle = colors.skin;
-        ctx.fillRect(22, 14 + bobY, 20, 18);
+        // --- 胴体（聖騎士の鎧） ---
+        p(21, 28, 22, 18, palette.armorDark);
+        p(22, 29, 20, 16, palette.armor);
+        // 鎧のグラデーション・ハイライト（HD-2D光沢）
+        p(24, 30, 8, 12, palette.armorHi);
+        p(25, 31, 4, 10, palette.armorRim);
+        p(32, 30, 8, 14, palette.armorMid);
+        
+        // 金の胸装飾（ロイヤルエンブレム）
+        p(27, 31, 10, 4, palette.goldMid);
+        p(28, 32, 8, 2, palette.gold);
+        p(30, 32, 4, 6, palette.goldHi);
 
-        // 目
-        ctx.fillStyle = colors.black;
-        ctx.fillRect(26, 22 + bobY, 3, 4);
-        ctx.fillRect(35, 22 + bobY, 3, 4);
-        ctx.fillStyle = colors.white;
-        ctx.fillRect(26, 22 + bobY, 1, 1);
-        ctx.fillRect(35, 22 + bobY, 1, 1);
+        // 腰のベルトとバックル
+        p(21, 43, 22, 4, palette.leatherDark);
+        p(22, 44, 20, 2, palette.leather);
+        p(28, 42, 8, 6, palette.goldDark);
+        p(29, 43, 6, 4, palette.gold);
+        p(30, 44, 4, 2, palette.goldHi);
 
-        // 髪の毛
-        ctx.fillStyle = colors.hair;
-        ctx.fillRect(20, 10 + bobY, 24, 8);
-        ctx.fillRect(20, 14 + bobY, 4, 12);
-        ctx.fillRect(40, 14 + bobY, 4, 12);
-        ctx.fillStyle = colors.hairHighlight;
-        ctx.fillRect(22, 12 + bobY, 12, 3);
-        // バンダナ / サークレット
-        ctx.fillStyle = colors.gold;
-        ctx.fillRect(22, 18 + bobY, 20, 3);
-        ctx.fillStyle = colors.capeRed;
-        ctx.fillRect(30, 17 + bobY, 4, 5);
+        // --- 頭部 ---
+        // 首・顔ベース
+        p(25, 24, 14, 6, palette.skinShadow);
+        p(23, 14, 18, 14, palette.skin);
+        p(24, 15, 10, 10, palette.skinHi);
+        p(33, 16, 8, 12, palette.skinMid);
 
-        // 腕と装備
-        // 左腕（盾側）
-        ctx.fillStyle = colors.armorBlue;
-        ctx.fillRect(16, 30 + bobY, 6, 12);
-        // 盾
-        ctx.fillStyle = colors.shieldBorder;
-        ctx.fillRect(12, 32 + bobY + (isStep1 ? -2 : 0), 10, 14);
-        ctx.fillStyle = colors.shieldBase;
-        ctx.fillRect(13, 33 + bobY + (isStep1 ? -2 : 0), 8, 12);
-        ctx.fillStyle = colors.shieldCross;
-        ctx.fillRect(16, 34 + bobY + (isStep1 ? -2 : 0), 2, 10);
-        ctx.fillRect(14, 38 + bobY + (isStep1 ? -2 : 0), 6, 2);
+        // 瞳（碧眼アニメ調ハイライト）
+        p(26, 20, 4, 4, palette.black);
+        p(34, 20, 4, 4, palette.black);
+        p(27, 21, 2, 3, palette.armorMid);
+        p(35, 21, 2, 3, palette.armorMid);
+        p(26, 20, 2, 2, palette.white);
+        p(34, 20, 2, 2, palette.white);
 
-        // 右腕（剣側）
-        ctx.fillStyle = colors.armorBlue;
-        ctx.fillRect(42, 30 + bobY, 6, 12);
-        ctx.fillStyle = colors.skin;
-        ctx.fillRect(42, 40 + bobY, 6, 4);
-        // 剣
-        ctx.fillStyle = colors.swordHilt;
-        ctx.fillRect(43, 36 + bobY + (isStep2 ? -3 : 0), 8, 3);
-        ctx.fillStyle = colors.swordBlade;
-        ctx.fillRect(46, 18 + bobY + (isStep2 ? -3 : 0), 3, 18);
+        // 黄金のサークレット（額の王冠飾り）
+        p(22, 16, 20, 4, palette.goldDark);
+        p(22, 17, 20, 2, palette.gold);
+        p(24, 17, 6, 1, palette.goldHi);
+        // 中央の赤い宝珠
+        p(30, 15, 4, 5, palette.capeDark);
+        p(31, 16, 2, 3, palette.capeHi);
+
+        // なびく金髪（精細レイヤー）
+        p(21, 9, 22, 7, palette.hairDark);
+        p(22, 10, 20, 6, palette.hair);
+        p(23, 11, 14, 3, palette.hairHi);
+        // 両サイドのハーフロングヘア
+        p(20, 14, 4, 12, palette.hairDark);
+        p(21, 14, 3, 10, palette.hair);
+        p(40, 14, 4, 12, palette.hairDark);
+        p(40, 14, 3, 10, palette.hairMid);
+
+        // --- 左手と盾（タワーシールド） ---
+        p(16, 30, 6, 10, palette.armor);
+        const shY = 30 + (isStep1 ? -2 : 0);
+        // 盾の縁取り
+        p(11, shY, 12, 18, palette.shieldBorderDark);
+        p(12, shY + 1, 10, 16, palette.shieldBorder);
+        p(12, shY + 1, 3, 14, palette.shieldBorderHi);
+        // 盾本体（重厚な濃紺鉄板）
+        p(13, shY + 2, 8, 14, palette.shieldBase);
+        // 黄金の十字架紋章
+        p(16, shY + 3, 2, 12, palette.gold);
+        p(14, shY + 6, 6, 2, palette.gold);
+        p(16, shY + 4, 1, 10, palette.goldHi);
+
+        // --- 右手と伝説の剣 ---
+        p(42, 30, 6, 10, palette.armorMid);
+        p(42, 38, 5, 5, palette.skin); // 手
+        const swY = isStep2 ? -4 : 0;
+        // 柄とツバ
+        p(41, 35 + swY, 10, 4, palette.goldDark);
+        p(42, 36 + swY, 8, 2, palette.gold);
+        p(44, 38 + swY, 4, 6, palette.leather); // グリップ
+        p(43, 44 + swY, 6, 4, palette.gold); // 柄頭宝珠
+        // 刀身（オーラを纏う聖剣）
+        ctx.fillStyle = palette.swordGlow;
+        ctx.fillRect(44, 8 + swY, 8, 28);
+        p(46, 10 + swY, 4, 26, palette.swordDark);
+        p(46, 10 + swY, 3, 25, palette.swordMid);
+        p(47, 10 + swY, 2, 24, palette.sword);
+        p(47, 10 + swY, 1, 22, palette.swordHi);
 
       } else if (dir === 1) {
-        // 【UP: 背面】
-        // 剣（背中越しに少し見える）
-        ctx.fillStyle = colors.swordBlade;
-        ctx.fillRect(44, 16 + bobY, 3, 16);
+        // ==========================================
+        // 【UP: 背面】 HD-2D なびくマント姿
+        // ==========================================
+        
+        // 背中に背負った剣の先端
+        p(42, 10, 4, 20, palette.swordDark);
+        p(43, 10, 2, 18, palette.sword);
+        p(43, 10, 1, 16, palette.swordHi);
 
-        // 足
-        ctx.fillStyle = colors.boots;
-        ctx.fillRect(24, 48 + bobY + (legOffset < 0 ? -2 : 0), 6, 10);
-        ctx.fillRect(34, 48 + bobY + (legOffset > 0 ? -2 : 0), 6, 10);
+        // 脚・ブーツ（後ろ姿）
+        const leftLegY = 46 + (legOffset < 0 ? -2 : 0);
+        const rightLegY = 46 + (legOffset > 0 ? -2 : 0);
+        p(24, leftLegY, 6, 12, palette.leatherDark);
+        p(25, leftLegY + 2, 5, 10, palette.leather);
+        p(34, rightLegY, 6, 12, palette.leatherDark);
+        p(34, rightLegY + 2, 5, 10, palette.leather);
 
-        // マント（全体を覆う）
-        ctx.fillStyle = colors.capeRed;
-        ctx.fillRect(18, 28 + bobY, 28, 22);
-        ctx.fillStyle = colors.capeDarkRed;
-        ctx.fillRect(20, 30 + bobY, 6, 20);
-        ctx.fillRect(38, 30 + bobY, 6, 20);
+        // 大マント（背面全体をリッチに覆う）
+        p(17, 24, 30, 26, palette.capeDark);
+        p(18, 25, 28, 24, palette.cape);
+        // マントのグラデーションと劇的なシワ（シェーディング）
+        p(20, 26, 8, 22, palette.capeHi);
+        p(28, 26, 6, 22, palette.capeMid);
+        p(34, 26, 10, 22, palette.capeDark);
+        p(22, 34, 4, 14, palette.capeDark); // 深いひだ
 
-        // 髪の毛（背面全体）
-        ctx.fillStyle = colors.hair;
-        ctx.fillRect(20, 10 + bobY, 24, 20);
-        ctx.fillStyle = colors.hairHighlight;
-        ctx.fillRect(24, 12 + bobY, 16, 4);
-        // 金のサークレット（後ろ紐）
-        ctx.fillStyle = colors.gold;
-        ctx.fillRect(20, 20 + bobY, 24, 3);
+        // 頭部後ろ姿
+        p(21, 10, 22, 18, palette.hairDark);
+        p(22, 11, 20, 16, palette.hair);
+        p(24, 12, 12, 6, palette.hairHi);
+        p(22, 18, 8, 8, palette.hairMid); // 後頭部の髪の流れ
 
-        // 盾のふち（左側に少し見える）
-        ctx.fillStyle = colors.shieldBorder;
-        ctx.fillRect(14, 34 + bobY, 4, 12);
+        // サークレットの後ろ紐
+        p(21, 20, 22, 3, palette.goldDark);
+        p(22, 21, 20, 1, palette.gold);
+
+        // 左側に少しののぞく盾の縁
+        p(13, 32, 4, 14, palette.shieldBorderDark);
+        p(14, 33, 2, 12, palette.shieldBorder);
 
       } else if (dir === 2) {
-        // 【LEFT: 左向き】
-        // マント（右側になびく）
-        ctx.fillStyle = colors.capeDarkRed;
-        ctx.fillRect(34, 30 + bobY, 10, 18);
-        ctx.fillStyle = colors.capeRed;
-        ctx.fillRect(36, 32 + bobY, 10, 16);
+        // ==========================================
+        // 【LEFT: 左向き】 HD-2D 躍動する横姿
+        // ==========================================
 
-        // 足（前後の歩行）
-        ctx.fillStyle = colors.boots;
-        const leftLegX = 28 + (isStep1 ? -6 : (isStep2 ? 6 : 0));
-        const rightLegX = 28 + (isStep1 ? 6 : (isStep2 ? -6 : 0));
-        ctx.fillRect(rightLegX, 48 + bobY, 6, 10);
-        ctx.fillRect(leftLegX, 48 + bobY - 1, 6, 10);
+        // --- なびくマント（右後ろへ劇的に広がる） ---
+        p(32, 26, 16, 22, palette.capeDark);
+        p(34, 28, 14, 18, palette.cape);
+        p(36, 30, 12, 14, palette.capeHi);
+        p(44, 34, 6, 10, palette.capeMid); // マント先端
 
-        // 体（横顔・横体）
-        ctx.fillStyle = colors.armorDarkBlue;
-        ctx.fillRect(26, 30 + bobY, 12, 18);
-        ctx.fillStyle = colors.armorBlue;
-        ctx.fillRect(24, 30 + bobY, 8, 18);
-        ctx.fillStyle = colors.gold;
-        ctx.fillRect(24, 44 + bobY, 12, 4);
+        // --- 脚（前後のストライド） ---
+        const fLegX = 27 + (isStep1 ? -6 : (isStep2 ? 6 : 0));
+        const bLegX = 29 + (isStep1 ? 6 : (isStep2 ? -6 : 0));
+        // 奥の脚（右脚：暗め）
+        p(bLegX, 46, 6, 12, palette.leatherDark);
+        p(bLegX + 1, 48, 4, 10, palette.leather);
+        // 手前の脚（左脚：明るめ）
+        p(fLegX, 45, 6, 13, palette.armorDark);
+        p(fLegX + 1, 47, 5, 11, palette.leather);
+        p(fLegX + 1, 49, 3, 8, palette.leatherHi);
+        p(fLegX - 2, 55, 8, 3, palette.leatherDark); // ブーツ
 
-        // 頭部
-        ctx.fillStyle = colors.skin;
-        ctx.fillRect(22, 14 + bobY, 16, 18);
+        // --- 胴体 ---
+        p(24, 28, 12, 18, palette.armorDark);
+        p(25, 29, 10, 16, palette.armor);
+        p(25, 30, 4, 14, palette.armorHi);
+        p(29, 30, 6, 14, palette.armorMid);
+        // 腰ベルト
+        p(23, 43, 14, 4, palette.leatherDark);
+        p(24, 44, 12, 2, palette.gold);
+
+        // --- 頭部（精悍な横顔） ---
+        p(23, 14, 14, 14, palette.skin);
+        p(23, 15, 8, 10, palette.skinHi);
+        p(30, 16, 7, 12, palette.skinShadow);
+        // 鼻筋・顎の立体感
+        p(21, 19, 3, 4, palette.skinHi);
+        p(22, 23, 3, 2, palette.skin);
+
         // 目
-        ctx.fillStyle = colors.black;
-        ctx.fillRect(24, 22 + bobY, 3, 4);
-        ctx.fillStyle = colors.white;
-        ctx.fillRect(24, 22 + bobY, 1, 1);
+        p(23, 19, 3, 4, palette.black);
+        p(23, 20, 2, 2, palette.armorRim);
+        p(23, 19, 1, 1, palette.white);
 
-        // 髪の毛
-        ctx.fillStyle = colors.hair;
-        ctx.fillRect(26, 10 + bobY, 16, 8);
-        ctx.fillRect(32, 14 + bobY, 10, 14);
-        ctx.fillStyle = colors.gold;
-        ctx.fillRect(22, 18 + bobY, 16, 3);
+        // 金髪（後ろに流れる）
+        p(24, 10, 16, 16, palette.hairDark);
+        p(25, 11, 14, 14, palette.hair);
+        p(26, 11, 8, 4, palette.hairHi);
+        p(34, 14, 8, 12, palette.hairMid); // 後ろになびく髪
 
-        // 盾（左側面に大きく構える）
-        ctx.fillStyle = colors.shieldBorder;
-        ctx.fillRect(14, 30 + bobY + (isStep1 ? -2 : 0), 8, 16);
-        ctx.fillStyle = colors.shieldBase;
-        ctx.fillRect(15, 31 + bobY + (isStep1 ? -2 : 0), 6, 14);
-        ctx.fillStyle = colors.shieldCross;
-        ctx.fillRect(17, 32 + bobY + (isStep1 ? -2 : 0), 2, 12);
+        // サークレット
+        p(22, 16, 14, 3, palette.goldDark);
+        p(22, 17, 12, 1, palette.goldHi);
+
+        // --- 盾（左側面に堂々と構える） ---
+        const shY = 29 + (isStep1 ? -2 : 0);
+        p(14, shY, 10, 20, palette.shieldBorderDark);
+        p(15, shY + 1, 8, 18, palette.shieldBorder);
+        p(15, shY + 1, 2, 16, palette.shieldBorderHi);
+        p(16, shY + 2, 6, 16, palette.shieldBase);
+        // 盾のエンブレム（側面から見た十字）
+        p(17, shY + 4, 2, 12, palette.gold);
+        p(16, shY + 8, 5, 2, palette.goldHi);
 
       } else if (dir === 3) {
-        // 【RIGHT: 右向き】
-        // マント（左側になびく）
-        ctx.fillStyle = colors.capeDarkRed;
-        ctx.fillRect(20, 30 + bobY, 10, 18);
-        ctx.fillStyle = colors.capeRed;
-        ctx.fillRect(18, 32 + bobY, 10, 16);
+        // ==========================================
+        // 【RIGHT: 右向き】 HD-2D 聖剣を構える姿
+        // ==========================================
 
-        // 足
-        ctx.fillStyle = colors.boots;
-        const leftLegX = 30 + (isStep1 ? 6 : (isStep2 ? -6 : 0));
-        const rightLegX = 30 + (isStep1 ? -6 : (isStep2 ? 6 : 0));
-        ctx.fillRect(rightLegX, 48 + bobY, 6, 10);
-        ctx.fillRect(leftLegX, 48 + bobY - 1, 6, 10);
+        // --- なびくマント（左後ろへなびく） ---
+        p(16, 26, 16, 22, palette.capeDark);
+        p(16, 28, 14, 18, palette.cape);
+        p(16, 30, 10, 14, palette.capeMid);
 
-        // 体
-        ctx.fillStyle = colors.armorDarkBlue;
-        ctx.fillRect(26, 30 + bobY, 12, 18);
-        ctx.fillStyle = colors.armorBlue;
-        ctx.fillRect(32, 30 + bobY, 8, 18);
-        ctx.fillStyle = colors.gold;
-        ctx.fillRect(28, 44 + bobY, 12, 4);
+        // --- 脚 ---
+        const fLegX = 31 + (isStep1 ? 6 : (isStep2 ? -6 : 0));
+        const bLegX = 29 + (isStep1 ? -6 : (isStep2 ? 6 : 0));
+        p(bLegX, 46, 6, 12, palette.leatherDark);
+        p(bLegX + 1, 48, 4, 10, palette.leather);
+        p(fLegX, 45, 6, 13, palette.armorDark);
+        p(fLegX + 1, 47, 5, 11, palette.leather);
+        p(fLegX + 2, 49, 3, 8, palette.leatherHi);
+        p(fLegX, 55, 8, 3, palette.leatherDark);
 
-        // 頭部
-        ctx.fillStyle = colors.skin;
-        ctx.fillRect(26, 14 + bobY, 16, 18);
+        // --- 胴体 ---
+        p(28, 28, 12, 18, palette.armorDark);
+        p(29, 29, 10, 16, palette.armor);
+        p(34, 30, 5, 14, palette.armorHi);
+        p(29, 30, 5, 14, palette.armorMid);
+        p(27, 43, 14, 4, palette.leatherDark);
+        p(28, 44, 12, 2, palette.gold);
+
+        // --- 頭部 ---
+        p(27, 14, 14, 14, palette.skin);
+        p(31, 15, 8, 10, palette.skinHi);
+        p(27, 16, 5, 12, palette.skinShadow);
+        p(40, 19, 3, 4, palette.skinHi); // 鼻
+        p(39, 23, 3, 2, palette.skin);
+
         // 目
-        ctx.fillStyle = colors.black;
-        ctx.fillRect(37, 22 + bobY, 3, 4);
-        ctx.fillStyle = colors.white;
-        ctx.fillRect(37, 22 + bobY, 1, 1);
+        p(38, 19, 3, 4, palette.black);
+        p(39, 20, 2, 2, palette.armorRim);
+        p(39, 19, 1, 1, palette.white);
 
-        // 髪の毛
-        ctx.fillStyle = colors.hair;
-        ctx.fillRect(22, 10 + bobY, 16, 8);
-        ctx.fillRect(22, 14 + bobY, 10, 14);
-        ctx.fillStyle = colors.gold;
-        ctx.fillRect(26, 18 + bobY, 16, 3);
+        // 髪
+        p(24, 10, 16, 16, palette.hairDark);
+        p(25, 11, 14, 14, palette.hair);
+        p(30, 11, 8, 4, palette.hairHi);
+        p(22, 14, 8, 12, palette.hairDark); // 後ろ髪
 
-        // 剣（右側に突き出すように構える）
-        ctx.fillStyle = colors.armorBlue;
-        ctx.fillRect(34, 32 + bobY, 6, 10);
-        ctx.fillStyle = colors.skin;
-        ctx.fillRect(38, 36 + bobY, 4, 4);
-        ctx.fillStyle = colors.swordHilt;
-        ctx.fillRect(40, 34 + bobY + (isStep2 ? -2 : 0), 4, 8);
-        ctx.fillStyle = colors.swordBlade;
-        ctx.fillRect(44, 20 + bobY + (isStep2 ? -2 : 0), 4, 18);
+        p(28, 16, 14, 3, palette.goldDark);
+        p(30, 17, 12, 1, palette.goldHi);
+
+        // --- 聖剣（右側に力強く構える） ---
+        const swY = isStep2 ? -3 : 0;
+        p(36, 32, 8, 8, palette.armor); // 右腕
+        p(40, 36, 5, 5, palette.skin);
+        // ツバ
+        p(41, 33 + swY, 4, 10, palette.goldDark);
+        p(42, 34 + swY, 2, 8, palette.goldHi);
+        // 刀身（前方に光を放つ）
+        ctx.fillStyle = palette.swordGlow;
+        ctx.fillRect(44, 14 + swY, 16, 24);
+        p(44, 18 + swY, 14, 6, palette.swordDark);
+        p(45, 19 + swY, 13, 4, palette.sword);
+        p(46, 20 + swY, 12, 2, palette.swordHi);
       }
 
-      ctx.restore();
+      ctx.restore(); // 揺れ restore
+      ctx.restore(); // 座標 restore
     }
   }
 
-  // Phaserのテクスチャに登録（64x64pxスプライトシートとして）
+  // Phaserテクスチャへ登録
   scene.textures.addSpriteSheet(textureKey, canvas as unknown as HTMLImageElement, {
     frameWidth: frameWidth,
     frameHeight: frameHeight
