@@ -47,7 +47,7 @@ export class GridMovementScene extends Phaser.Scene {
   
   // 設定
   private moveSpeedMs: number = 450; // 1グリッド移動にかかる時間(ms)
-  private isRandomWalkEnabled: boolean = true;
+  private autoMode: 'none' | 'random' | 'seek' = 'random';
   private showGridLines: boolean = true;
   private isHd2dEffectsEnabled: boolean = true;
 
@@ -325,8 +325,8 @@ export class GridMovementScene extends Phaser.Scene {
     this.particleMotes.forEach(m => m.setVisible(this.isHd2dEffectsEnabled));
   }
 
-  public setRandomWalk(enabled: boolean) {
-    this.isRandomWalkEnabled = enabled;
+  public setAutoMode(mode: 'none' | 'random' | 'seek') {
+    this.autoMode = mode;
   }
 
   public setSpeed(speedMs: number) {
@@ -341,19 +341,49 @@ export class GridMovementScene extends Phaser.Scene {
   }
 
   private checkAndMoveRandomly() {
-    if (!this.isRandomWalkEnabled) return;
+    if (this.autoMode === 'none') return;
 
-    // 勇者のランダム移動
+    // 勇者の自動移動
     if (!this.isMoving) {
-      const possibleDirs: Direction[] = [];
-      if (this.currentGridY > 0) possibleDirs.push('up');
-      if (this.currentGridY < GridMovementScene.GRID_ROWS - 1) possibleDirs.push('down');
-      if (this.currentGridX > 0) possibleDirs.push('left');
-      if (this.currentGridX < GridMovementScene.GRID_COLS - 1) possibleDirs.push('right');
+      if (this.autoMode === 'seek') {
+        // 索敵・戦闘モード (AIを使わないロジック)
+        if (this.slimes.length > 0) {
+          // 最も近いスライムを探す
+          let closestSlime: SlimeData | null = null;
+          let minDistance = Infinity;
 
-      if (possibleDirs.length > 0) {
-        const nextDir = Phaser.Utils.Array.GetRandom(possibleDirs);
-        this.moveInDirection(nextDir);
+          this.slimes.forEach(slime => {
+            const dist = Math.abs(slime.gridX - this.currentGridX) + Math.abs(slime.gridY - this.currentGridY);
+            if (dist < minDistance) {
+              minDistance = dist;
+              closestSlime = slime;
+            }
+          });
+
+          if (closestSlime) {
+            // 最も近いスライムに近づく方向を決定
+            const possibleDirs: Direction[] = [];
+            const sx = closestSlime.gridX;
+            const sy = closestSlime.gridY;
+
+            if (this.currentGridX > sx) possibleDirs.push('left');
+            if (this.currentGridX < sx) possibleDirs.push('right');
+            if (this.currentGridY > sy) possibleDirs.push('up');
+            if (this.currentGridY < sy) possibleDirs.push('down');
+
+            if (possibleDirs.length > 0) {
+              // 複数ある場合はランダムに一つ選ぶ
+              const nextDir = Phaser.Utils.Array.GetRandom(possibleDirs);
+              this.moveInDirection(nextDir);
+            }
+          }
+        } else {
+          // 敵がいない場合はランダム散策
+          this.performRandomWalk();
+        }
+      } else {
+        // 通常のランダムウォーク
+        this.performRandomWalk();
       }
     }
 
@@ -373,6 +403,62 @@ export class GridMovementScene extends Phaser.Scene {
         this.moveSlime(slime, nextDir);
       }
     });
+  }
+
+  private performRandomWalk() {
+    const possibleDirs: Direction[] = [];
+    if (this.currentGridY > 0) possibleDirs.push('up');
+    if (this.currentGridY < GridMovementScene.GRID_ROWS - 1) possibleDirs.push('down');
+    if (this.currentGridX > 0) possibleDirs.push('left');
+    if (this.currentGridX < GridMovementScene.GRID_COLS - 1) possibleDirs.push('right');
+
+    if (possibleDirs.length > 0) {
+      const nextDir = Phaser.Utils.Array.GetRandom(possibleDirs);
+      this.moveInDirection(nextDir);
+    }
+  }
+
+  private checkCollision() {
+    for (let i = this.slimes.length - 1; i >= 0; i--) {
+      const slime = this.slimes[i];
+      if (slime.gridX === this.currentGridX && slime.gridY === this.currentGridY) {
+        // 敵との接触処理 (消滅させる)
+        this.tweens.add({
+          targets: slime.sprite,
+          scaleX: 0,
+          scaleY: 0,
+          alpha: 0,
+          duration: 200,
+          onComplete: () => {
+            if (slime.sprite && slime.sprite.active) {
+              slime.sprite.destroy();
+            }
+          }
+        });
+        
+        // 攻撃エフェクト
+        const slash = this.add.graphics();
+        slash.setDepth(15);
+        slash.lineStyle(4, 0xfacc15, 1);
+        const sx = slime.sprite.x - 20;
+        const sy = slime.sprite.y - 20;
+        const ex = slime.sprite.x + 20;
+        const ey = slime.sprite.y + 20;
+        slash.beginPath();
+        slash.moveTo(sx, sy);
+        slash.lineTo(ex, ey);
+        slash.strokePath();
+        
+        this.tweens.add({
+          targets: slash,
+          alpha: 0,
+          duration: 300,
+          onComplete: () => slash.destroy()
+        });
+
+        this.slimes.splice(i, 1);
+      }
+    }
   }
 
   private moveSlime(slime: SlimeData, dir: Direction) {
@@ -405,6 +491,7 @@ export class GridMovementScene extends Phaser.Scene {
     const moveDuration = this.moveSpeedMs - shakeDuration;
 
     this.time.delayedCall(shakeDuration, () => {
+      if (!slime.sprite || !slime.sprite.active) return;
       slime.sprite.play('slime-jump'); // 移動中のフレーム
       this.tweens.add({
         targets: slime.sprite,
@@ -416,7 +503,9 @@ export class GridMovementScene extends Phaser.Scene {
           slime.gridX = targetGridX;
           slime.gridY = targetGridY;
           slime.isMoving = false;
-          slime.sprite.play('slime-idle');
+          if (slime.sprite && slime.sprite.active) {
+            slime.sprite.play('slime-idle');
+          }
         }
       });
     });
@@ -510,6 +599,7 @@ export class GridMovementScene extends Phaser.Scene {
 
         this.hero.play(`idle-${dir}`, true);
         this.notifyStateChange(false);
+        this.checkCollision();
       }
     });
 

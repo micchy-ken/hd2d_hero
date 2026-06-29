@@ -20,7 +20,7 @@ export const PhaserGameContainer: React.FC = () => {
     speedMs: 450
   });
 
-  const [isRandomWalk, setIsRandomWalk] = useState<boolean>(true);
+  const [autoMode, setAutoMode] = useState<'none' | 'random' | 'seek'>('random');
   const [showGrid, setShowGrid] = useState<boolean>(true);
   const [isHd2d, setIsHd2d] = useState<boolean>(true);
   const [speed, setSpeed] = useState<number>(450);
@@ -80,10 +80,14 @@ export const PhaserGameContainer: React.FC = () => {
   }, []);
 
   // UI操作ハンドラー
-  const toggleRandomWalk = () => {
-    const nextVal = !isRandomWalk;
-    setIsRandomWalk(nextVal);
-    sceneRef.current?.setRandomWalk(nextVal);
+  const toggleAutoMode = () => {
+    let nextMode: 'none' | 'random' | 'seek' = 'none';
+    if (autoMode === 'none') nextMode = 'random';
+    else if (autoMode === 'random') nextMode = 'seek';
+    else nextMode = 'none';
+
+    setAutoMode(nextMode);
+    sceneRef.current?.setAutoMode(nextMode);
   };
 
   const toggleGrid = () => {
@@ -180,22 +184,26 @@ export const PhaserGameContainer: React.FC = () => {
             <Gauge className="w-5 h-5 text-emerald-600" /> Control & Testing Panel
           </h3>
 
-          {/* 自動ランダムウォーク切替 */}
+          {/* 自動移動モード切替 */}
           <div className="flex items-center justify-between bg-slate-50 p-3.5 rounded-xl border border-slate-200/80">
             <div>
-              <div className="text-sm font-medium text-slate-800">Random Walk AI</div>
-              <div className="text-xs text-slate-500">Auto random movement every turn</div>
+              <div className="text-sm font-medium text-slate-800">Auto Movement</div>
+              <div className="text-xs text-slate-500">
+                {autoMode === 'none' && 'Manual control only'}
+                {autoMode === 'random' && 'Wandering randomly'}
+                {autoMode === 'seek' && 'Seek & Combat (No AI)'}
+              </div>
             </div>
             <button
-              onClick={toggleRandomWalk}
+              onClick={toggleAutoMode}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all shadow-sm ${
-                isRandomWalk 
+                autoMode !== 'none'
                   ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/20' 
                   : 'bg-slate-200 hover:bg-slate-300 text-slate-700'
               }`}
             >
-              {isRandomWalk ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-              {isRandomWalk ? 'Active' : 'Paused'}
+              {autoMode === 'none' ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+              {autoMode === 'none' ? 'OFF' : (autoMode === 'random' ? 'Random' : 'Seek')}
             </button>
           </div>
 
