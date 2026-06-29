@@ -25,6 +25,8 @@ interface SlimeData {
   sprite: Phaser.GameObjects.Sprite;
   gridX: number;
   gridY: number;
+  targetGridX?: number;
+  targetGridY?: number;
   isMoving: boolean;
   hp: number;
   maxHp: number;
@@ -54,6 +56,8 @@ export class GridMovementScene extends Phaser.Scene {
   // 状態管理
   private currentGridX: number = 7; // 16x16の中央付近(7,7)
   private currentGridY: number = 7;
+  private heroTargetGridX: number | null = null;
+  private heroTargetGridY: number | null = null;
   private currentCamGridX: number = 4; // 7x7画面の中央に(7,7)が来るようカメラ左上を(4,4)に設定
   private currentCamGridY: number = 4;
   private isMoving: boolean = false;
@@ -75,6 +79,10 @@ export class GridMovementScene extends Phaser.Scene {
   // Pointer Movement
   private pointerTargetGridX: number | null = null;
   private pointerTargetGridY: number | null = null;
+
+  // Keyboard Movement
+  private cursors?: Phaser.Types.Input.Keyboard.CursorKeys;
+  private wasdKeys?: any;
 
   // Reactコールバック用
   private onStateChangeCallback?: (state: HeroState) => void;
@@ -228,7 +236,13 @@ export class GridMovementScene extends Phaser.Scene {
     // 8. 初回ステータス通知
     this.notifyStateChange();
 
-    // 9. ポインター入力による移動処理
+    // 9. キーボード入力の初期化
+    if (this.input.keyboard) {
+      this.cursors = this.input.keyboard.createCursorKeys();
+      this.wasdKeys = this.input.keyboard.addKeys('W,S,A,D');
+    }
+
+    // 10. ポインター入力による移動処理
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       if (this.autoMode !== 'none') {
         this.pointerTargetGridX = null;
@@ -256,6 +270,34 @@ export class GridMovementScene extends Phaser.Scene {
       callbackScope: this,
       loop: true
     });
+  }
+
+  public update(time: number, delta: number) {
+    if (this.autoMode === 'none' && !this.isMoving) {
+      let moved = false;
+      
+      if (this.cursors?.up.isDown || this.wasdKeys?.W.isDown) {
+        this.pointerTargetGridX = null;
+        this.pointerTargetGridY = null;
+        this.moveInDirection('up');
+        moved = true;
+      } else if (this.cursors?.down.isDown || this.wasdKeys?.S.isDown) {
+        this.pointerTargetGridX = null;
+        this.pointerTargetGridY = null;
+        this.moveInDirection('down');
+        moved = true;
+      } else if (this.cursors?.left.isDown || this.wasdKeys?.A.isDown) {
+        this.pointerTargetGridX = null;
+        this.pointerTargetGridY = null;
+        this.moveInDirection('left');
+        moved = true;
+      } else if (this.cursors?.right.isDown || this.wasdKeys?.D.isDown) {
+        this.pointerTargetGridX = null;
+        this.pointerTargetGridY = null;
+        this.moveInDirection('right');
+        moved = true;
+      }
+    }
   }
 
   private startMoteAnimation(mote: Phaser.GameObjects.Arc) {
@@ -427,15 +469,14 @@ export class GridMovementScene extends Phaser.Scene {
           }
         }
       }
-      return;
     }
 
     // スライムの補充
     if (this.slimes.length < 5 && Math.random() < 0.1) {
       const sx = Phaser.Math.Between(2, GridMovementScene.GRID_COLS - 3);
       const sy = Phaser.Math.Between(2, GridMovementScene.GRID_ROWS - 3);
-      // 勇者の位置以外に湧く
-      if (sx !== this.currentGridX && sy !== this.currentGridY) {
+      // 空いているマスに湧く
+      if (!this.isTileOccupied(sx, sy)) {
         const { GRID_SIZE } = GridMovementScene;
         const slimeSprite = this.add.sprite(sx * GRID_SIZE + GRID_SIZE / 2, sy * GRID_SIZE + GRID_SIZE / 2, 'slime_spritesheet', 0);
         slimeSprite.setDepth(9);
@@ -455,7 +496,7 @@ export class GridMovementScene extends Phaser.Scene {
     }
 
     // 勇者の自動移動
-    if (!this.isMoving) {
+    if (this.autoMode !== 'none' && !this.isMoving) {
       if (this.autoMode === 'seek') {
         // 索敵・戦闘モード (AIを使わないロジック)
         if (this.slimes.length > 0) {
@@ -651,6 +692,16 @@ export class GridMovementScene extends Phaser.Scene {
     });
   }
 
+  private isTileOccupied(x: number, y: number): boolean {
+    if (this.currentGridX === x && this.currentGridY === y) return true;
+    if (this.heroTargetGridX === x && this.heroTargetGridY === y) return true;
+    for (const s of this.slimes) {
+      if (s.gridX === x && s.gridY === y) return true;
+      if (s.targetGridX === x && s.targetGridY === y) return true;
+    }
+    return false;
+  }
+
   private moveSlime(slime: SlimeData, dir: Direction) {
     if (slime.isMoving) return;
 
@@ -665,14 +716,17 @@ export class GridMovementScene extends Phaser.Scene {
     }
 
     // 勇者への攻撃判定
-    if (targetGridX === this.currentGridX && targetGridY === this.currentGridY) {
+    if ((targetGridX === this.currentGridX && targetGridY === this.currentGridY) || 
+        (targetGridX === this.heroTargetGridX && targetGridY === this.heroTargetGridY)) {
       this.performSlimeAttack(slime);
       return;
     }
-    // 他のスライムとの重なり防止
-    if (this.slimes.some(s => s.gridX === targetGridX && s.gridY === targetGridY)) return;
+    // 全てのキャラクターとの重なり防止
+    if (this.isTileOccupied(targetGridX, targetGridY)) return;
 
     slime.isMoving = true;
+    slime.targetGridX = targetGridX;
+    slime.targetGridY = targetGridY;
     slime.sprite.play('slime-shake'); // プルプル震える
 
     const { GRID_SIZE } = GridMovementScene;
@@ -695,6 +749,8 @@ export class GridMovementScene extends Phaser.Scene {
         onComplete: () => {
           slime.gridX = targetGridX;
           slime.gridY = targetGridY;
+          slime.targetGridX = undefined;
+          slime.targetGridY = undefined;
           slime.isMoving = false;
           if (slime.sprite && slime.sprite.active) {
             slime.sprite.play('slime-idle');
@@ -727,7 +783,11 @@ export class GridMovementScene extends Phaser.Scene {
     const { VIEWPORT_COLS, VIEWPORT_ROWS, GRID_COLS, GRID_ROWS, GRID_SIZE } = GridMovementScene;
     
     // スライムとの戦闘判定
-    const targetSlimeIndex = this.slimes.findIndex(s => s.gridX === targetGridX && s.gridY === targetGridY);
+    const targetSlimeIndex = this.slimes.findIndex(s => 
+      (s.gridX === targetGridX && s.gridY === targetGridY) || 
+      (s.targetGridX === targetGridX && s.targetGridY === targetGridY)
+    );
+    
     if (targetSlimeIndex !== -1) {
       this.isMoving = true;
       this.currentDirection = dir;
@@ -735,6 +795,9 @@ export class GridMovementScene extends Phaser.Scene {
       this.performAttack(targetSlimeIndex);
       return true;
     }
+
+    // 全てのキャラクターとの重なり防止
+    if (this.isTileOccupied(targetGridX, targetGridY)) return false;
 
     // カメラのデッドゾーン（中心5x5グリッド内はカメラ固定、それ以外はスクロール）計算
     const maxCamGridX = GRID_COLS - VIEWPORT_COLS; // 16 - 7 = 9
@@ -770,6 +833,8 @@ export class GridMovementScene extends Phaser.Scene {
     const isScrolling = targetCamGridX !== this.currentCamGridX || targetCamGridY !== this.currentCamGridY;
 
     this.isMoving = true;
+    this.heroTargetGridX = targetGridX;
+    this.heroTargetGridY = targetGridY;
     this.currentDirection = dir;
     this.hero.play(`walk-${dir}`, true);
 
@@ -798,6 +863,8 @@ export class GridMovementScene extends Phaser.Scene {
       onComplete: () => {
         this.currentGridX = targetGridX;
         this.currentGridY = targetGridY;
+        this.heroTargetGridX = null;
+        this.heroTargetGridY = null;
         this.isMoving = false;
         this.targetMarker.clear();
 
