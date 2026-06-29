@@ -1,12 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
 import Phaser from 'phaser';
-import { GridMovementScene, HeroState, Direction } from '../phaser/GridMovementScene';
-import { Play, Pause, RotateCcw, Eye, EyeOff, Sparkles, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Gauge, Grid, Image as ImageIcon } from 'lucide-react';
+import { GridMovementScene, HeroState, Direction, ActionLog } from '../phaser/GridMovementScene';
+import { Play, Pause, RotateCcw, Eye, EyeOff, Sparkles, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Gauge, Grid, Image as ImageIcon, Heart, Sword, Star } from 'lucide-react';
 
 export const PhaserGameContainer: React.FC = () => {
   const gameContainerRef = useRef<HTMLDivElement>(null);
   const gameInstanceRef = useRef<Phaser.Game | null>(null);
   const sceneRef = useRef<GridMovementScene | null>(null);
+  const logEndRef = useRef<HTMLDivElement>(null);
 
   // UIステータス
   const [heroState, setHeroState] = useState<HeroState>({
@@ -17,15 +18,27 @@ export const PhaserGameContainer: React.FC = () => {
     direction: 'idle',
     isMoving: false,
     isScrolling: false,
-    speedMs: 450
+    speedMs: 450,
+    hp: 20,
+    maxHp: 20,
+    attack: 5,
+    level: 1,
+    exp: 0
   });
 
+  const [logs, setLogs] = useState<ActionLog[]>([]);
   const [autoMode, setAutoMode] = useState<'none' | 'random' | 'seek'>('random');
   const [showGrid, setShowGrid] = useState<boolean>(true);
   const [isHd2d, setIsHd2d] = useState<boolean>(true);
   const [speed, setSpeed] = useState<number>(450);
   const [showSpritesheetModal, setShowSpritesheetModal] = useState<boolean>(false);
   const [spritesheetUrl, setSpritesheetUrl] = useState<string>('');
+
+  useEffect(() => {
+    if (logEndRef.current) {
+      logEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [logs]);
 
   useEffect(() => {
     if (!gameContainerRef.current) return;
@@ -57,6 +70,10 @@ export const PhaserGameContainer: React.FC = () => {
         sceneRef.current = scene;
         scene.setOnStateChange((newState) => {
           setHeroState(newState);
+        });
+        
+        scene.setOnLog((newLog) => {
+          setLogs(prev => [...prev.slice(-49), newLog]); // 最新50件を保持
         });
 
         // テクスチャからプレビュー用URLを抽出
@@ -121,7 +138,7 @@ export const PhaserGameContainer: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col xl:flex-row gap-8 items-center xl:items-start justify-center w-full max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
+    <div className="flex flex-col xl:flex-row gap-6 items-center xl:items-start justify-center w-full max-w-[1400px] mx-auto p-4 sm:p-6 lg:p-8">
       
       {/* 左側：ゲーム画面（448x448pxフレーム） */}
       <div className="flex flex-col items-center bg-white rounded-2xl shadow-xl border border-emerald-100 overflow-hidden p-4 sm:p-6">
@@ -163,18 +180,44 @@ export const PhaserGameContainer: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-2 gap-3 font-mono text-sm mb-3">
-            <div className="bg-slate-800/80 p-3 rounded-xl border border-slate-700/60">
-              <span className="text-[11px] text-slate-400 block mb-1">World Coord (16x16)</span>
-              <span className="text-base font-bold text-white">X:{heroState.gridX} / Y:{heroState.gridY}</span>
+            <div className="bg-slate-800/80 p-3 rounded-xl border border-slate-700/60 flex flex-col justify-between">
+              <div className="flex items-center gap-1.5 text-[11px] text-slate-400 mb-1">
+                <Heart className="w-3.5 h-3.5 text-rose-400" /> HP
+              </div>
+              <div className="text-base font-bold text-white">
+                <span className={heroState.hp <= 5 ? "text-rose-400" : ""}>{heroState.hp}</span> / {heroState.maxHp}
+              </div>
+              <div className="w-full bg-slate-700 h-1.5 rounded-full mt-2 overflow-hidden">
+                <div 
+                  className={`h-full rounded-full transition-all ${heroState.hp <= 5 ? 'bg-rose-500' : 'bg-emerald-500'}`} 
+                  style={{ width: `${Math.max(0, (heroState.hp / heroState.maxHp) * 100)}%` }} 
+                />
+              </div>
             </div>
-            <div className="bg-slate-800/80 p-3 rounded-xl border border-slate-700/60">
-              <span className="text-[11px] text-slate-400 block mb-1">Camera Pos (TopLeft)</span>
-              <span className="text-base font-bold text-sky-300">CX:{heroState.camGridX} / CY:{heroState.camGridY}</span>
+            
+            <div className="bg-slate-800/80 p-3 rounded-xl border border-slate-700/60 flex flex-col justify-between">
+              <div className="flex items-center gap-1.5 text-[11px] text-slate-400 mb-1">
+                <Star className="w-3.5 h-3.5 text-amber-400" /> Lv.{heroState.level} EXP
+              </div>
+              <div className="text-base font-bold text-sky-300">
+                {heroState.exp} / 10
+              </div>
+              <div className="w-full bg-slate-700 h-1.5 rounded-full mt-2 overflow-hidden">
+                <div 
+                  className="h-full bg-sky-400 rounded-full transition-all" 
+                  style={{ width: `${(heroState.exp / 10) * 100}%` }} 
+                />
+              </div>
             </div>
           </div>
-          <div className="bg-slate-800/80 p-2.5 rounded-xl border border-slate-700/60 font-mono text-xs flex items-center justify-between">
-            <span className="text-slate-400">Facing: <strong className="uppercase text-emerald-400">{heroState.direction}</strong></span>
-            <span className="text-slate-400">Deadzone: <strong className="text-white">5x5 Center</strong></span>
+          <div className="bg-slate-800/80 p-2.5 rounded-xl border border-slate-700/60 font-mono text-xs flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Sword className="w-4 h-4 text-slate-400" />
+              <span className="text-slate-300">ATK: <strong className="text-white text-sm">{heroState.attack}</strong></span>
+            </div>
+            <div className="flex items-center gap-2">
+               <span className="text-slate-400">Pos: <strong className="text-white">({heroState.gridX}, {heroState.gridY})</strong></span>
+            </div>
           </div>
         </div>
 
@@ -321,6 +364,38 @@ export const PhaserGameContainer: React.FC = () => {
 
         </div>
 
+      </div>
+      
+      {/* 右側2：アクションログ */}
+      <div className="flex flex-col gap-6 w-full max-w-sm">
+        <div className="bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden flex flex-col h-[600px]">
+          <div className="bg-slate-50 border-b border-slate-200 p-4 flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-slate-800">Action Log</h3>
+            <span className="text-[10px] bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full">Live</span>
+          </div>
+          
+          <div className="flex-1 overflow-y-auto p-4 space-y-2.5 flex flex-col bg-slate-50/50">
+            {logs.length === 0 ? (
+              <div className="flex items-center justify-center h-full text-xs text-slate-400 italic">
+                No events yet...
+              </div>
+            ) : (
+              logs.map((log) => (
+                <div key={log.id} className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+                  <div className={`text-xs p-2.5 rounded-lg border leading-relaxed ${
+                    log.type === 'damage' ? 'bg-rose-50 border-rose-200 text-rose-700' :
+                    log.type === 'combat' ? 'bg-amber-50 border-amber-200 text-amber-700' :
+                    log.type === 'system' ? 'bg-sky-50 border-sky-200 text-sky-700 font-medium' :
+                    'bg-white border-slate-200 text-slate-600 shadow-sm'
+                  }`}>
+                    {log.message}
+                  </div>
+                </div>
+              ))
+            )}
+            <div ref={logEndRef} />
+          </div>
+        </div>
       </div>
 
       {/* スプライトシートの切り出し確認モーダル */}
