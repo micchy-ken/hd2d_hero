@@ -72,6 +72,10 @@ export class GridMovementScene extends Phaser.Scene {
   private heroLevel: number = 1;
   private heroExp: number = 0;
 
+  // Pointer Movement
+  private pointerTargetGridX: number | null = null;
+  private pointerTargetGridY: number | null = null;
+
   // Reactコールバック用
   private onStateChangeCallback?: (state: HeroState) => void;
   private onLogCallback?: (log: ActionLog) => void;
@@ -224,7 +228,28 @@ export class GridMovementScene extends Phaser.Scene {
     // 8. 初回ステータス通知
     this.notifyStateChange();
 
-    // 9. ランダムウォークAIタイマー
+    // 9. ポインター入力による移動処理
+    this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      if (this.autoMode !== 'none') {
+        this.pointerTargetGridX = null;
+        this.pointerTargetGridY = null;
+        return;
+      }
+      
+      const worldPoint = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
+      const targetGridX = Math.floor(worldPoint.x / GridMovementScene.GRID_SIZE);
+      const targetGridY = Math.floor(worldPoint.y / GridMovementScene.GRID_SIZE);
+      
+      // フィールド範囲内か確認
+      if (targetGridX >= 0 && targetGridX < GridMovementScene.GRID_COLS &&
+          targetGridY >= 0 && targetGridY < GridMovementScene.GRID_ROWS) {
+        this.pointerTargetGridX = targetGridX;
+        this.pointerTargetGridY = targetGridY;
+        this.sendLog(`Moving to (${targetGridX}, ${targetGridY})`, 'system');
+      }
+    });
+
+    // 10. AI/自動移動タイマー
     this.time.addEvent({
       delay: 100,
       callback: this.checkAndMoveRandomly,
@@ -380,7 +405,30 @@ export class GridMovementScene extends Phaser.Scene {
   }
 
   private checkAndMoveRandomly() {
-    if (this.autoMode === 'none') return;
+    if (this.autoMode === 'none') {
+      if (this.pointerTargetGridX !== null && this.pointerTargetGridY !== null) {
+        if (!this.isMoving) {
+          const dx = this.pointerTargetGridX - this.currentGridX;
+          const dy = this.pointerTargetGridY - this.currentGridY;
+          if (dx === 0 && dy === 0) {
+            this.pointerTargetGridX = null;
+            this.pointerTargetGridY = null;
+          } else {
+            const possibleDirs: Direction[] = [];
+            if (dx > 0) possibleDirs.push('right');
+            else if (dx < 0) possibleDirs.push('left');
+            if (dy > 0) possibleDirs.push('down');
+            else if (dy < 0) possibleDirs.push('up');
+            
+            if (possibleDirs.length > 0) {
+              const nextDir = Phaser.Utils.Array.GetRandom(possibleDirs);
+              this.moveInDirection(nextDir);
+            }
+          }
+        }
+      }
+      return;
+    }
 
     // スライムの補充
     if (this.slimes.length < 5 && Math.random() < 0.1) {
@@ -586,7 +634,7 @@ export class GridMovementScene extends Phaser.Scene {
         this.sendLog(`Slime attacked Hero for ${damage} damage!`, 'damage');
         
         // 画面フラッシュ
-        this.cameras.main.flash(200, 255, 0, 0, 0.4);
+        this.cameras.main.flash(200, 255, 0, 0);
         
         this.notifyStateChange(false);
 

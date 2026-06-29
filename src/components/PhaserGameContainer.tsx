@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import Phaser from 'phaser';
 import { GridMovementScene, HeroState, Direction, ActionLog } from '../phaser/GridMovementScene';
-import { Play, Pause, RotateCcw, Eye, EyeOff, Sparkles, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Gauge, Grid, Image as ImageIcon, Heart, Sword, Star } from 'lucide-react';
+import { Play, Pause, RotateCcw, Eye, EyeOff, Sparkles, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Gauge, Grid, Image as ImageIcon, Heart, Sword, Star, Settings, X } from 'lucide-react';
 
 export const PhaserGameContainer: React.FC = () => {
   const gameContainerRef = useRef<HTMLDivElement>(null);
@@ -9,6 +9,7 @@ export const PhaserGameContainer: React.FC = () => {
   const sceneRef = useRef<GridMovementScene | null>(null);
 
   // UIステータス
+  const [showSettings, setShowSettings] = useState(false);
   const [heroState, setHeroState] = useState<HeroState>({
     gridX: 7,
     gridY: 7,
@@ -117,122 +118,90 @@ export const PhaserGameContainer: React.FC = () => {
     sceneRef.current?.setSpeed(newSpeed);
   };
 
-  const handleManualMove = (dir: Direction) => {
-    // 手動操作時はランダムウォークを一旦OFFにする
-    if (isRandomWalk) {
-      setIsRandomWalk(false);
-      sceneRef.current?.setRandomWalk(false);
-    }
-    sceneRef.current?.moveInDirection(dir);
-  };
-
   const handleReset = () => {
     sceneRef.current?.resetPosition();
   };
 
   return (
-    <div className="flex flex-col xl:flex-row gap-6 items-center xl:items-start justify-center w-full max-w-5xl mx-auto p-4 sm:p-6 lg:p-8">
+    <div className="flex flex-col items-center justify-center w-full max-w-5xl mx-auto p-4 sm:p-6 lg:p-8 relative">
       
-      {/* 左側：ゲーム画面（448x448pxフレーム） */}
-      <div className="flex flex-col items-center bg-white rounded-2xl shadow-xl border border-emerald-100 overflow-hidden p-4 sm:p-6">
-        <div className="flex items-center justify-between w-full mb-4 px-2">
-          <div className="flex items-center gap-2">
-            <span className="inline-block w-3 h-3 rounded-full bg-emerald-500 animate-pulse" />
-            <h2 className="text-lg font-semibold text-slate-800 tracking-tight">HD-2D Stage (7x7 View / 16x16 Field)</h2>
-          </div>
-          <div className="text-xs font-mono px-2.5 py-1 bg-slate-100 text-slate-600 rounded-md">
-            448 × 448 px
-          </div>
-        </div>
+      {/* Settings Toggle Button */}
+      <button 
+        onClick={() => setShowSettings(!showSettings)}
+        className="absolute top-4 right-4 sm:top-6 sm:right-6 p-2 bg-white rounded-full shadow-md border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors z-20"
+      >
+        {showSettings ? <X className="w-5 h-5" /> : <Settings className="w-5 h-5" />}
+      </button>
 
-        {/* Phaser描画ターゲットとログオーバーレイのラッパー */}
-        <div className="relative rounded-lg overflow-hidden shadow-inner border-2 border-emerald-600 bg-emerald-50 select-none" style={{ width: 448, height: 448 }}>
-          <div 
-            ref={gameContainerRef} 
-            className="w-full h-full"
-          />
-          {/* アクションログオーバーレイ (最新5件) */}
-          <div className="absolute bottom-2 right-2 w-64 pointer-events-none flex flex-col justify-end gap-1 z-10 p-2">
-            {logs.slice(-5).map((log) => (
-              <div key={log.id} className={`animate-in fade-in slide-in-from-bottom-2 duration-300 text-xs font-bold text-right drop-shadow-md ${
-                log.type === 'damage' ? 'text-rose-400' :
-                log.type === 'combat' ? 'text-amber-400' :
-                log.type === 'system' ? 'text-sky-300 font-extrabold' :
-                'text-white'
-              }`} style={{ textShadow: '1px 1px 2px rgba(0,0,0,0.8), -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000' }}>
-                {log.message}
-              </div>
-            ))}
-          </div>
-        </div>
+      <div className={showSettings ? "hidden" : "flex flex-col items-center gap-4 animate-in fade-in zoom-in-95 duration-200"}>
+        {/* 左側：ゲーム画面（448x448pxフレーム） */}
+        <div className="flex flex-col items-center bg-white rounded-2xl shadow-xl border border-emerald-100 overflow-hidden p-4 sm:p-6">
 
-        <div className="flex items-center justify-between w-full mt-4 pt-4 border-t border-slate-100 text-xs text-slate-500">
-          <div>1 Grid = <span className="font-semibold text-slate-700">64 × 64 px</span></div>
-          <div>Scroll = <span className="font-semibold text-emerald-600">Inner 5x5 Fixed</span></div>
-        </div>
-      </div>
-
-      {/* 右側：コントロール＆ステータスパネル */}
-      <div className="flex flex-col gap-6 w-full max-w-md">
-        
-        {/* ステータスカード */}
-        <div className="bg-gradient-to-br from-slate-900 to-slate-800 text-white rounded-2xl shadow-xl p-6 border border-slate-700">
-          <div className="flex items-center justify-between pb-4 border-b border-slate-700 mb-4">
-            <h3 className="font-semibold text-emerald-400 flex items-center gap-2">
-              <Sparkles className="w-4 h-4" /> Hero Status Tracker
-            </h3>
-            <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${heroState.isScrolling ? 'bg-sky-500/20 text-sky-300 border border-sky-500/40' : (heroState.isMoving ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40')}`}>
-              {heroState.isScrolling ? 'Scrolling...' : (heroState.isMoving ? 'Walking...' : 'Standing')}
-            </span>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3 font-mono text-sm mb-3">
-            <div className="bg-slate-800/80 p-3 rounded-xl border border-slate-700/60 flex flex-col justify-between">
-              <div className="flex items-center gap-1.5 text-[11px] text-slate-400 mb-1">
-                <Heart className="w-3.5 h-3.5 text-rose-400" /> HP
-              </div>
-              <div className="text-base font-bold text-white">
-                <span className={heroState.hp <= 5 ? "text-rose-400" : ""}>{heroState.hp}</span> / {heroState.maxHp}
-              </div>
-              <div className="w-full bg-slate-700 h-1.5 rounded-full mt-2 overflow-hidden">
-                <div 
-                  className={`h-full rounded-full transition-all ${heroState.hp <= 5 ? 'bg-rose-500' : 'bg-emerald-500'}`} 
-                  style={{ width: `${Math.max(0, (heroState.hp / heroState.maxHp) * 100)}%` }} 
-                />
-              </div>
-            </div>
             
-            <div className="bg-slate-800/80 p-3 rounded-xl border border-slate-700/60 flex flex-col justify-between">
-              <div className="flex items-center gap-1.5 text-[11px] text-slate-400 mb-1">
-                <Star className="w-3.5 h-3.5 text-amber-400" /> Lv.{heroState.level} EXP
-              </div>
-              <div className="text-base font-bold text-sky-300">
-                {heroState.exp} / 10
-              </div>
-              <div className="w-full bg-slate-700 h-1.5 rounded-full mt-2 overflow-hidden">
-                <div 
-                  className="h-full bg-sky-400 rounded-full transition-all" 
-                  style={{ width: `${(heroState.exp / 10) * 100}%` }} 
-                />
+            {/* Phaser描画ターゲットとログオーバーレイのラッパー */}
+            <div className="relative rounded-lg overflow-hidden shadow-inner border-2 border-emerald-600 bg-emerald-50 select-none" style={{ width: 448, height: 448 }}>
+              <div 
+                ref={gameContainerRef} 
+                className="w-full h-full"
+              />
+              {/* アクションログオーバーレイ (最新5件) */}
+              <div className="absolute bottom-2 right-2 w-64 pointer-events-none flex flex-col justify-end gap-1 z-10 p-2">
+                {logs.slice(-5).map((log) => (
+                  <div key={log.id} className={`animate-in fade-in slide-in-from-bottom-2 duration-300 text-xs font-bold text-right drop-shadow-md ${
+                    log.type === 'damage' ? 'text-rose-400' :
+                    log.type === 'combat' ? 'text-amber-400' :
+                    log.type === 'system' ? 'text-sky-300 font-extrabold' :
+                    'text-white'
+                  }`} style={{ textShadow: '1px 1px 2px rgba(0,0,0,0.8), -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000' }}>
+                    {log.message}
+                  </div>
+                ))}
               </div>
             </div>
-          </div>
-          <div className="bg-slate-800/80 p-2.5 rounded-xl border border-slate-700/60 font-mono text-xs flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <Sword className="w-4 h-4 text-slate-400" />
-              <span className="text-slate-300">ATK: <strong className="text-white text-sm">{heroState.attack}</strong></span>
-            </div>
-            <div className="flex items-center gap-2">
-               <span className="text-slate-400">Pos: <strong className="text-white">({heroState.gridX}, {heroState.gridY})</strong></span>
+
+            {/* HP and Level Status Bar */}
+            <div className="w-full mt-4 flex items-center justify-between gap-4 font-mono">
+              <div className="flex-1 bg-slate-800/80 p-3 rounded-xl border border-slate-700/60 flex flex-col justify-between">
+                <div className="flex items-center gap-1.5 text-[11px] text-slate-400 mb-1">
+                  <Heart className="w-3.5 h-3.5 text-rose-400" /> HP
+                </div>
+                <div className="text-base font-bold text-white">
+                  <span className={heroState.hp <= 5 ? "text-rose-400" : ""}>{heroState.hp}</span> / {heroState.maxHp}
+                </div>
+                <div className="w-full bg-slate-700 h-1.5 rounded-full mt-2 overflow-hidden">
+                  <div 
+                    className={`h-full rounded-full transition-all ${heroState.hp <= 5 ? 'bg-rose-500' : 'bg-emerald-500'}`} 
+                    style={{ width: `${Math.max(0, (heroState.hp / heroState.maxHp) * 100)}%` }} 
+                  />
+                </div>
+              </div>
+              
+              <div className="flex-1 bg-slate-800/80 p-3 rounded-xl border border-slate-700/60 flex flex-col justify-between">
+                <div className="flex items-center gap-1.5 text-[11px] text-slate-400 mb-1">
+                  <Star className="w-3.5 h-3.5 text-amber-400" /> Lv.{heroState.level} EXP
+                </div>
+                <div className="text-base font-bold text-sky-300">
+                  {heroState.exp} / 10
+                </div>
+                <div className="w-full bg-slate-700 h-1.5 rounded-full mt-2 overflow-hidden">
+                  <div 
+                    className="h-full bg-sky-400 rounded-full transition-all" 
+                    style={{ width: `${(heroState.exp / 10) * 100}%` }} 
+                  />
+                </div>
+              </div>
             </div>
           </div>
         </div>
+      
+      {/* 右側：コントロール＆ステータスパネル (設定画面) */}
+      <div className={!showSettings ? "hidden" : "flex flex-col gap-6 w-full max-w-md animate-in fade-in zoom-in-95 duration-200"}>
+          
+          <div className="bg-white rounded-2xl shadow-xl p-6 border border-slate-200 flex flex-col gap-6">
+            <h3 className="text-base font-semibold text-slate-800 pb-3 border-b border-slate-100 flex items-center gap-2">
+              <Gauge className="w-5 h-5 text-emerald-600" /> Control & Testing Panel
+            </h3>
 
-        {/* コントロールカード */}
-        <div className="bg-white rounded-2xl shadow-xl p-6 border border-slate-200 flex flex-col gap-6">
-          <h3 className="text-base font-semibold text-slate-800 pb-3 border-b border-slate-100 flex items-center gap-2">
-            <Gauge className="w-5 h-5 text-emerald-600" /> Control & Testing Panel
-          </h3>
 
           {/* 自動移動モード切替 */}
           <div className="flex items-center justify-between bg-slate-50 p-3.5 rounded-xl border border-slate-200/80">
@@ -255,54 +224,6 @@ export const PhaserGameContainer: React.FC = () => {
               {autoMode === 'none' ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
               {autoMode === 'none' ? 'OFF' : (autoMode === 'random' ? 'Random' : 'Seek')}
             </button>
-          </div>
-
-          {/* 手動方向指示（D-Padテスト） */}
-          <div className="flex flex-col items-center bg-slate-50 p-4 rounded-xl border border-slate-200/80">
-            <span className="text-xs font-medium text-slate-600 mb-3 block">Manual Direction Test (Overrides AI)</span>
-            <div className="grid grid-cols-3 gap-2 w-36">
-              <div />
-              <button
-                disabled={heroState.isMoving}
-                onClick={() => handleManualMove('up')}
-                className="p-3 bg-white hover:bg-emerald-50 active:bg-emerald-100 disabled:opacity-40 border border-slate-300 rounded-xl shadow-sm flex items-center justify-center text-slate-700 transition-colors"
-                title="Move UP"
-              >
-                <ArrowUp className="w-5 h-5" />
-              </button>
-              <div />
-
-              <button
-                disabled={heroState.isMoving}
-                onClick={() => handleManualMove('left')}
-                className="p-3 bg-white hover:bg-emerald-50 active:bg-emerald-100 disabled:opacity-40 border border-slate-300 rounded-xl shadow-sm flex items-center justify-center text-slate-700 transition-colors"
-                title="Move LEFT"
-              >
-                <ArrowLeft className="w-5 h-5" />
-              </button>
-              <div className="flex items-center justify-center">
-                <span className="w-2 h-2 rounded-full bg-slate-300" />
-              </div>
-              <button
-                disabled={heroState.isMoving}
-                onClick={() => handleManualMove('right')}
-                className="p-3 bg-white hover:bg-emerald-50 active:bg-emerald-100 disabled:opacity-40 border border-slate-300 rounded-xl shadow-sm flex items-center justify-center text-slate-700 transition-colors"
-                title="Move RIGHT"
-              >
-                <ArrowRight className="w-5 h-5" />
-              </button>
-
-              <div />
-              <button
-                disabled={heroState.isMoving}
-                onClick={() => handleManualMove('down')}
-                className="p-3 bg-white hover:bg-emerald-50 active:bg-emerald-100 disabled:opacity-40 border border-slate-300 rounded-xl shadow-sm flex items-center justify-center text-slate-700 transition-colors"
-                title="Move DOWN"
-              >
-                <ArrowDown className="w-5 h-5" />
-              </button>
-              <div />
-            </div>
           </div>
 
           {/* 移動スピード調整 */}
@@ -368,9 +289,7 @@ export const PhaserGameContainer: React.FC = () => {
               Center
             </button>
           </div>
-
         </div>
-
       </div>
       
       {/* スプライトシートの切り出し確認モーダル */}
