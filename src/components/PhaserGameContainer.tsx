@@ -7,7 +7,6 @@ export const PhaserGameContainer: React.FC = () => {
   const gameContainerRef = useRef<HTMLDivElement>(null);
   const gameInstanceRef = useRef<Phaser.Game | null>(null);
   const sceneRef = useRef<GridMovementScene | null>(null);
-  const logEndRef = useRef<HTMLDivElement>(null);
 
   // UIステータス
   const [heroState, setHeroState] = useState<HeroState>({
@@ -27,18 +26,12 @@ export const PhaserGameContainer: React.FC = () => {
   });
 
   const [logs, setLogs] = useState<ActionLog[]>([]);
-  const [autoMode, setAutoMode] = useState<'none' | 'random' | 'seek'>('random');
+  const [autoMode, setAutoMode] = useState<'none' | 'random' | 'seek'>('seek');
   const [showGrid, setShowGrid] = useState<boolean>(true);
   const [isHd2d, setIsHd2d] = useState<boolean>(true);
   const [speed, setSpeed] = useState<number>(450);
   const [showSpritesheetModal, setShowSpritesheetModal] = useState<boolean>(false);
   const [spritesheetUrl, setSpritesheetUrl] = useState<string>('');
-
-  useEffect(() => {
-    if (logEndRef.current) {
-      logEndRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
-  }, [logs]);
 
   useEffect(() => {
     if (!gameContainerRef.current) return;
@@ -138,7 +131,7 @@ export const PhaserGameContainer: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col xl:flex-row gap-6 items-center xl:items-start justify-center w-full max-w-[1400px] mx-auto p-4 sm:p-6 lg:p-8">
+    <div className="flex flex-col xl:flex-row gap-6 items-center xl:items-start justify-center w-full max-w-5xl mx-auto p-4 sm:p-6 lg:p-8">
       
       {/* 左側：ゲーム画面（448x448pxフレーム） */}
       <div className="flex flex-col items-center bg-white rounded-2xl shadow-xl border border-emerald-100 overflow-hidden p-4 sm:p-6">
@@ -152,12 +145,26 @@ export const PhaserGameContainer: React.FC = () => {
           </div>
         </div>
 
-        {/* Phaser描画ターゲット */}
-        <div 
-          ref={gameContainerRef} 
-          className="rounded-lg overflow-hidden shadow-inner border-2 border-emerald-600 bg-emerald-50 select-none"
-          style={{ width: 448, height: 448 }}
-        />
+        {/* Phaser描画ターゲットとログオーバーレイのラッパー */}
+        <div className="relative rounded-lg overflow-hidden shadow-inner border-2 border-emerald-600 bg-emerald-50 select-none" style={{ width: 448, height: 448 }}>
+          <div 
+            ref={gameContainerRef} 
+            className="w-full h-full"
+          />
+          {/* アクションログオーバーレイ (最新5件) */}
+          <div className="absolute bottom-2 right-2 w-64 pointer-events-none flex flex-col justify-end gap-1.5 z-10 p-2">
+            {logs.slice(-5).map((log) => (
+              <div key={log.id} className={`animate-in fade-in slide-in-from-bottom-2 duration-300 text-[11px] p-2 rounded-md bg-black/70 backdrop-blur-sm border shadow-lg ${
+                log.type === 'damage' ? 'border-rose-500/50 text-rose-200' :
+                log.type === 'combat' ? 'border-amber-500/50 text-amber-200' :
+                log.type === 'system' ? 'border-sky-500/50 text-sky-200 font-medium' :
+                'border-white/20 text-white'
+              }`}>
+                {log.message}
+              </div>
+            ))}
+          </div>
+        </div>
 
         <div className="flex items-center justify-between w-full mt-4 pt-4 border-t border-slate-100 text-xs text-slate-500">
           <div>1 Grid = <span className="font-semibold text-slate-700">64 × 64 px</span></div>
@@ -366,38 +373,6 @@ export const PhaserGameContainer: React.FC = () => {
 
       </div>
       
-      {/* 右側2：アクションログ */}
-      <div className="flex flex-col gap-6 w-full max-w-sm">
-        <div className="bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden flex flex-col h-[600px]">
-          <div className="bg-slate-50 border-b border-slate-200 p-4 flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-slate-800">Action Log</h3>
-            <span className="text-[10px] bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full">Live</span>
-          </div>
-          
-          <div className="flex-1 overflow-y-auto p-4 space-y-2.5 flex flex-col bg-slate-50/50">
-            {logs.length === 0 ? (
-              <div className="flex items-center justify-center h-full text-xs text-slate-400 italic">
-                No events yet...
-              </div>
-            ) : (
-              logs.map((log) => (
-                <div key={log.id} className="animate-in fade-in slide-in-from-bottom-2 duration-300">
-                  <div className={`text-xs p-2.5 rounded-lg border leading-relaxed ${
-                    log.type === 'damage' ? 'bg-rose-50 border-rose-200 text-rose-700' :
-                    log.type === 'combat' ? 'bg-amber-50 border-amber-200 text-amber-700' :
-                    log.type === 'system' ? 'bg-sky-50 border-sky-200 text-sky-700 font-medium' :
-                    'bg-white border-slate-200 text-slate-600 shadow-sm'
-                  }`}>
-                    {log.message}
-                  </div>
-                </div>
-              ))
-            )}
-            <div ref={logEndRef} />
-          </div>
-        </div>
-      </div>
-
       {/* スプライトシートの切り出し確認モーダル */}
       {showSpritesheetModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">

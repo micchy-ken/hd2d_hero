@@ -61,7 +61,7 @@ export class GridMovementScene extends Phaser.Scene {
   
   // 設定
   private moveSpeedMs: number = 450; // 1グリッド移動にかかる時間(ms)
-  private autoMode: 'none' | 'random' | 'seek' = 'random';
+  private autoMode: 'none' | 'random' | 'seek' = 'seek';
   private showGridLines: boolean = true;
   private isHd2dEffectsEnabled: boolean = true;
 
