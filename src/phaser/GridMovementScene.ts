@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { generateHeroSpritesheet } from './HeroSpritesheet';
+import { generateSlimeSpritesheet } from './MonsterSpritesheets';
 
 export type Direction = 'up' | 'down' | 'left' | 'right' | 'idle';
 
@@ -12,6 +13,13 @@ export interface HeroState {
   isMoving: boolean;
   isScrolling: boolean;
   speedMs: number;
+}
+
+interface SlimeData {
+  sprite: Phaser.GameObjects.Sprite;
+  gridX: number;
+  gridY: number;
+  isMoving: boolean;
 }
 
 export class GridMovementScene extends Phaser.Scene {
@@ -27,6 +35,7 @@ export class GridMovementScene extends Phaser.Scene {
   private hd2dLighting!: Phaser.GameObjects.Graphics;
   private vignetteOverlay!: Phaser.GameObjects.Graphics;
   private particleMotes!: Phaser.GameObjects.Arc[];
+  private slimes: SlimeData[] = [];
 
   // 状態管理
   private currentGridX: number = 7; // 16x16の中央付近(7,7)
@@ -56,6 +65,7 @@ export class GridMovementScene extends Phaser.Scene {
 
   preload() {
     generateHeroSpritesheet(this);
+    generateSlimeSpritesheet(this);
   }
 
   create() {
@@ -106,6 +116,24 @@ export class GridMovementScene extends Phaser.Scene {
       });
     });
 
+    // スライムのアニメーション
+    this.anims.create({
+      key: 'slime-idle',
+      frames: [{ key: 'slime_spritesheet', frame: 0 }],
+      frameRate: 1
+    });
+    this.anims.create({
+      key: 'slime-shake',
+      frames: this.anims.generateFrameNumbers('slime_spritesheet', { start: 1, end: 2 }),
+      frameRate: 12,
+      repeat: -1
+    });
+    this.anims.create({
+      key: 'slime-jump',
+      frames: [{ key: 'slime_spritesheet', frame: 3 }],
+      frameRate: 1
+    });
+
     // 5. 勇者スプライト配置
     const startX = this.currentGridX * GRID_SIZE + GRID_SIZE / 2;
     const startY = this.currentGridY * GRID_SIZE + GRID_SIZE / 2;
@@ -113,6 +141,23 @@ export class GridMovementScene extends Phaser.Scene {
     this.hero = this.add.sprite(startX, startY, 'hero_spritesheet', 0);
     this.hero.setDepth(10);
     this.hero.play('idle-down');
+
+    // 5.5. スライムの配置
+    this.slimes = [];
+    for (let i = 0; i < 5; i++) {
+      const sx = Phaser.Math.Between(2, GRID_COLS - 3);
+      const sy = Phaser.Math.Between(2, GRID_ROWS - 3);
+      const slimeSprite = this.add.sprite(sx * GRID_SIZE + GRID_SIZE / 2, sy * GRID_SIZE + GRID_SIZE / 2, 'slime_spritesheet', 0);
+      slimeSprite.setDepth(9); // 勇者より少し奥
+      slimeSprite.play('slime-idle');
+      
+      this.slimes.push({
+        sprite: slimeSprite,
+        gridX: sx,
+        gridY: sy,
+        isMoving: false
+      });
+    }
 
     // 6. HD-2D マナ粒子（ホタル風パーティクル）の生成（カメラ固定領域内で生成）
     this.particleMotes = [];
@@ -296,18 +341,85 @@ export class GridMovementScene extends Phaser.Scene {
   }
 
   private checkAndMoveRandomly() {
-    if (!this.isRandomWalkEnabled || this.isMoving) return;
+    if (!this.isRandomWalkEnabled) return;
 
-    const possibleDirs: Direction[] = [];
-    if (this.currentGridY > 0) possibleDirs.push('up');
-    if (this.currentGridY < GridMovementScene.GRID_ROWS - 1) possibleDirs.push('down');
-    if (this.currentGridX > 0) possibleDirs.push('left');
-    if (this.currentGridX < GridMovementScene.GRID_COLS - 1) possibleDirs.push('right');
+    // 勇者のランダム移動
+    if (!this.isMoving) {
+      const possibleDirs: Direction[] = [];
+      if (this.currentGridY > 0) possibleDirs.push('up');
+      if (this.currentGridY < GridMovementScene.GRID_ROWS - 1) possibleDirs.push('down');
+      if (this.currentGridX > 0) possibleDirs.push('left');
+      if (this.currentGridX < GridMovementScene.GRID_COLS - 1) possibleDirs.push('right');
 
-    if (possibleDirs.length > 0) {
-      const nextDir = Phaser.Utils.Array.GetRandom(possibleDirs);
-      this.moveInDirection(nextDir);
+      if (possibleDirs.length > 0) {
+        const nextDir = Phaser.Utils.Array.GetRandom(possibleDirs);
+        this.moveInDirection(nextDir);
+      }
     }
+
+    // スライムのランダム移動
+    this.slimes.forEach(slime => {
+      if (slime.isMoving) return;
+      if (Math.random() > 0.3) return; // 30%の確率で動く
+
+      const slimeDirs: Direction[] = [];
+      if (slime.gridY > 0) slimeDirs.push('up');
+      if (slime.gridY < GridMovementScene.GRID_ROWS - 1) slimeDirs.push('down');
+      if (slime.gridX > 0) slimeDirs.push('left');
+      if (slime.gridX < GridMovementScene.GRID_COLS - 1) slimeDirs.push('right');
+
+      if (slimeDirs.length > 0) {
+        const nextDir = Phaser.Utils.Array.GetRandom(slimeDirs);
+        this.moveSlime(slime, nextDir);
+      }
+    });
+  }
+
+  private moveSlime(slime: SlimeData, dir: Direction) {
+    if (slime.isMoving) return;
+
+    let targetGridX = slime.gridX;
+    let targetGridY = slime.gridY;
+
+    switch (dir) {
+      case 'up': targetGridY -= 1; break;
+      case 'down': targetGridY += 1; break;
+      case 'left': targetGridX -= 1; break;
+      case 'right': targetGridX += 1; break;
+    }
+
+    // 重なり防止 (簡易的に勇者と同じマスにはいかない)
+    if (targetGridX === this.currentGridX && targetGridY === this.currentGridY) return;
+    // 他のスライムとの重なり防止
+    if (this.slimes.some(s => s.gridX === targetGridX && s.gridY === targetGridY)) return;
+
+    slime.isMoving = true;
+    slime.sprite.play('slime-shake'); // プルプル震える
+
+    const { GRID_SIZE } = GridMovementScene;
+    const targetX = targetGridX * GRID_SIZE + GRID_SIZE / 2;
+    const targetY = targetGridY * GRID_SIZE + GRID_SIZE / 2;
+
+    // プルプルする時間 (移動速度の30%程度、最大150ms)
+    const shakeDuration = Math.min(150, this.moveSpeedMs * 0.3);
+    const moveDuration = this.moveSpeedMs - shakeDuration;
+
+    this.time.delayedCall(shakeDuration, () => {
+      slime.sprite.play('slime-jump'); // 移動中のフレーム
+      this.tweens.add({
+        targets: slime.sprite,
+        x: targetX,
+        y: targetY,
+        duration: moveDuration,
+        ease: 'Quad.easeOut',
+        onComplete: () => {
+          slime.gridX = targetGridX;
+          slime.gridY = targetGridY;
+          slime.isMoving = false;
+          slime.sprite.play('slime-idle');
+        }
+      });
+    });
   }
 
   public moveInDirection(dir: Direction): boolean {
