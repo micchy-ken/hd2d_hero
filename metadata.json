@@ -1,0 +1,6 @@
+{
+  "name": "Phaser.js Grid Movement Demo",
+  "description": "A 9x9 grid random walking hero demo with 64x64px directional spritesheet animations built on Phaser 3.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
