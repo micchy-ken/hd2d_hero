@@ -6,15 +6,20 @@ export type Direction = 'up' | 'down' | 'left' | 'right' | 'idle';
 export interface HeroState {
   gridX: number;
   gridY: number;
+  camGridX: number;
+  camGridY: number;
   direction: Direction;
   isMoving: boolean;
+  isScrolling: boolean;
   speedMs: number;
 }
 
 export class GridMovementScene extends Phaser.Scene {
   public static readonly GRID_SIZE = 64;
-  public static readonly GRID_COLS = 9;
-  public static readonly GRID_ROWS = 9;
+  public static readonly GRID_COLS = 16;
+  public static readonly GRID_ROWS = 16;
+  public static readonly VIEWPORT_COLS = 7;
+  public static readonly VIEWPORT_ROWS = 7;
 
   private hero!: Phaser.GameObjects.Sprite;
   private gridGraphics!: Phaser.GameObjects.Graphics;
@@ -24,8 +29,10 @@ export class GridMovementScene extends Phaser.Scene {
   private particleMotes!: Phaser.GameObjects.Arc[];
 
   // 状態管理
-  private currentGridX: number = 4; // 中央スタート (0-indexed 0~8の4)
-  private currentGridY: number = 4;
+  private currentGridX: number = 7; // 16x16の中央付近(7,7)
+  private currentGridY: number = 7;
+  private currentCamGridX: number = 4; // 7x7画面の中央に(7,7)が来るようカメラ左上を(4,4)に設定
+  private currentCamGridY: number = 4;
   private isMoving: boolean = false;
   private currentDirection: Direction = 'idle';
   
@@ -52,14 +59,20 @@ export class GridMovementScene extends Phaser.Scene {
   }
 
   create() {
-    const { GRID_SIZE, GRID_COLS, GRID_ROWS } = GridMovementScene;
+    const { GRID_SIZE, GRID_COLS, GRID_ROWS, VIEWPORT_COLS, VIEWPORT_ROWS } = GridMovementScene;
+
+    // カメラ境界を設定
+    this.cameras.main.setBounds(0, 0, GRID_COLS * GRID_SIZE, GRID_ROWS * GRID_SIZE);
+    this.cameras.main.scrollX = this.currentCamGridX * GRID_SIZE;
+    this.cameras.main.scrollY = this.currentCamGridY * GRID_SIZE;
 
     // 1. 背景グリッドとタイルの作成
     this.createGridBackground();
 
-    // 2. HD-2D 環境光＆ゴッドレイ風オーバーレイ
+    // 2. HD-2D 環境光＆ゴッドレイ風オーバーレイ (カメラ固定)
     this.hd2dLighting = this.add.graphics();
     this.hd2dLighting.setDepth(2);
+    this.hd2dLighting.setScrollFactor(0, 0);
     this.drawHd2dLighting();
 
     // 3. 移動先ターゲットのマーカー
@@ -101,25 +114,27 @@ export class GridMovementScene extends Phaser.Scene {
     this.hero.setDepth(10);
     this.hero.play('idle-down');
 
-    // 6. HD-2D マナ粒子（ホタル風パーティクル）の生成
+    // 6. HD-2D マナ粒子（ホタル風パーティクル）の生成（カメラ固定領域内で生成）
     this.particleMotes = [];
-    for (let i = 0; i < 24; i++) {
-      const px = Phaser.Math.Between(0, GRID_COLS * GRID_SIZE);
-      const py = Phaser.Math.Between(0, GRID_ROWS * GRID_SIZE);
+    for (let i = 0; i < 20; i++) {
+      const px = Phaser.Math.Between(0, VIEWPORT_COLS * GRID_SIZE);
+      const py = Phaser.Math.Between(0, VIEWPORT_ROWS * GRID_SIZE);
       const radius = Phaser.Math.FloatBetween(1, 2.8);
       const color = Phaser.Math.RND.pick([0xfef08a, 0xa5f3fc, 0xffffff, 0xbbf7d0]);
       
       const mote = this.add.circle(px, py, radius, color, Phaser.Math.FloatBetween(0.3, 0.85));
       mote.setDepth(15);
+      mote.setScrollFactor(0, 0); // 常に画面内に表示
       this.particleMotes.push(mote);
 
       // ふわふわ漂うトゥイーン
       this.startMoteAnimation(mote);
     }
 
-    // 7. HD-2D ヴィネット（シネマティック枠）
+    // 7. HD-2D ヴィネット（シネマティック枠）(カメラ固定)
     this.vignetteOverlay = this.add.graphics();
     this.vignetteOverlay.setDepth(20);
+    this.vignetteOverlay.setScrollFactor(0, 0);
     this.drawVignette();
 
     // 8. 初回ステータス通知
@@ -147,8 +162,8 @@ export class GridMovementScene extends Phaser.Scene {
       duration: duration,
       ease: 'Sine.easeInOut',
       onComplete: () => {
-        const { GRID_SIZE, GRID_COLS, GRID_ROWS } = GridMovementScene;
-        mote.setPosition(Phaser.Math.Between(0, GRID_COLS * GRID_SIZE), GRID_ROWS * GRID_SIZE + 10);
+        const { GRID_SIZE, VIEWPORT_COLS, VIEWPORT_ROWS } = GridMovementScene;
+        mote.setPosition(Phaser.Math.Between(0, VIEWPORT_COLS * GRID_SIZE), VIEWPORT_ROWS * GRID_SIZE + 10);
         mote.setAlpha(Phaser.Math.FloatBetween(0.3, 0.8));
         this.startMoteAnimation(mote);
       }
@@ -178,8 +193,34 @@ export class GridMovementScene extends Phaser.Scene {
           this.gridGraphics.fillStyle(0x34d399, isEven ? 0.08 : 0.04);
           this.gridGraphics.fillRect(col * GRID_SIZE + 2, row * GRID_SIZE + 2, GRID_SIZE - 4, GRID_SIZE - 4);
         }
+
+        // スクロール時の現在地把握に役立つ自然のランドマーク配置
+        const landmarkHash = (row * 37 + col * 17) % 13;
+        if (landmarkHash === 1) {
+          // 小さな黄・白の花
+          this.gridGraphics.fillStyle(0xfef08a, 0.75);
+          this.gridGraphics.fillCircle(col * GRID_SIZE + 20, row * GRID_SIZE + 24, 3.5);
+          this.gridGraphics.fillStyle(0xffffff, 0.85);
+          this.gridGraphics.fillCircle(col * GRID_SIZE + 16, row * GRID_SIZE + 21, 2);
+          this.gridGraphics.fillCircle(col * GRID_SIZE + 24, row * GRID_SIZE + 21, 2);
+        } else if (landmarkHash === 4) {
+          // 森の小石
+          this.gridGraphics.fillStyle(0x334155, 0.8);
+          this.gridGraphics.fillRoundedRect(col * GRID_SIZE + 40, row * GRID_SIZE + 42, 10, 6, 2);
+          this.gridGraphics.fillStyle(0x475569, 0.5);
+          this.gridGraphics.fillRoundedRect(col * GRID_SIZE + 41, row * GRID_SIZE + 43, 8, 3, 1);
+        } else if (landmarkHash === 7) {
+          // 小さなシダ植物
+          this.gridGraphics.fillStyle(0x10b981, 0.55);
+          this.gridGraphics.fillRect(col * GRID_SIZE + 14, row * GRID_SIZE + 46, 4, 10);
+          this.gridGraphics.fillRect(col * GRID_SIZE + 20, row * GRID_SIZE + 44, 4, 12);
+        }
       }
     }
+
+    // 16x16フィールド全体の外枠ボーダー
+    this.gridGraphics.lineStyle(4, 0x047857, 0.9);
+    this.gridGraphics.strokeRect(1, 1, GRID_COLS * GRID_SIZE - 2, GRID_ROWS * GRID_SIZE - 2);
 
     // グリッド線
     if (this.showGridLines) {
@@ -194,29 +235,31 @@ export class GridMovementScene extends Phaser.Scene {
   }
 
   private drawHd2dLighting() {
-    const { GRID_SIZE, GRID_COLS, GRID_ROWS } = GridMovementScene;
+    const { GRID_SIZE, VIEWPORT_COLS, VIEWPORT_ROWS } = GridMovementScene;
+    const totalW = VIEWPORT_COLS * GRID_SIZE; // 448
+    const totalH = VIEWPORT_ROWS * GRID_SIZE; // 448
     this.hd2dLighting.clear();
 
     if (!this.isHd2dEffectsEnabled) return;
 
     // 左上からの陽光（サンライト・ゴッドレイ）
     this.hd2dLighting.fillStyle(0xfef08a, 0.12);
-    this.hd2dLighting.fillTriangle(0, 0, GRID_COLS * GRID_SIZE * 0.7, 0, 0, GRID_ROWS * GRID_SIZE * 0.7);
+    this.hd2dLighting.fillTriangle(0, 0, totalW * 0.7, 0, 0, totalH * 0.7);
 
     this.hd2dLighting.fillStyle(0x38bdf8, 0.08);
-    this.hd2dLighting.fillTriangle(GRID_COLS * GRID_SIZE, 0, GRID_COLS * GRID_SIZE, GRID_ROWS * GRID_SIZE, 0, GRID_ROWS * GRID_SIZE);
+    this.hd2dLighting.fillTriangle(totalW, 0, totalW, totalH, 0, totalH);
   }
 
   private drawVignette() {
-    const { GRID_SIZE, GRID_COLS, GRID_ROWS } = GridMovementScene;
-    const totalW = GRID_COLS * GRID_SIZE;
-    const totalH = GRID_ROWS * GRID_SIZE;
+    const { GRID_SIZE, VIEWPORT_COLS, VIEWPORT_ROWS } = GridMovementScene;
+    const totalW = VIEWPORT_COLS * GRID_SIZE;
+    const totalH = VIEWPORT_ROWS * GRID_SIZE;
 
     this.vignetteOverlay.clear();
     if (!this.isHd2dEffectsEnabled) return;
 
     // 周辺減光（ヴィネットフレーム）
-    const frameSize = 48;
+    const frameSize = 38;
     this.vignetteOverlay.fillStyle(0x022c22, 0.45);
     this.vignetteOverlay.fillRect(0, 0, totalW, frameSize);
     this.vignetteOverlay.fillRect(0, totalH - frameSize, totalW, frameSize);
@@ -287,11 +330,44 @@ export class GridMovementScene extends Phaser.Scene {
       return false;
     }
 
+    // カメラのデッドゾーン（中心5x5グリッド内はカメラ固定、それ以外はスクロール）計算
+    const { VIEWPORT_COLS, VIEWPORT_ROWS, GRID_COLS, GRID_ROWS, GRID_SIZE } = GridMovementScene;
+    const maxCamGridX = GRID_COLS - VIEWPORT_COLS; // 16 - 7 = 9
+    const maxCamGridY = GRID_ROWS - VIEWPORT_ROWS; // 9
+
+    let targetCamGridX = this.currentCamGridX;
+    let targetCamGridY = this.currentCamGridY;
+
+    const nextViewX = targetGridX - this.currentCamGridX;
+    const nextViewY = targetGridY - this.currentCamGridY;
+
+    // 7x7画面インデックス(0~6)。中心は3。中心±2(インデックス1~5)は固定、0または6に進む場合にスクロール
+    if (nextViewX > 5) {
+      if (this.currentCamGridX < maxCamGridX) {
+        targetCamGridX = this.currentCamGridX + 1;
+      }
+    } else if (nextViewX < 1) {
+      if (this.currentCamGridX > 0) {
+        targetCamGridX = this.currentCamGridX - 1;
+      }
+    }
+
+    if (nextViewY > 5) {
+      if (this.currentCamGridY < maxCamGridY) {
+        targetCamGridY = this.currentCamGridY + 1;
+      }
+    } else if (nextViewY < 1) {
+      if (this.currentCamGridY > 0) {
+        targetCamGridY = this.currentCamGridY - 1;
+      }
+    }
+
+    const isScrolling = targetCamGridX !== this.currentCamGridX || targetCamGridY !== this.currentCamGridY;
+
     this.isMoving = true;
     this.currentDirection = dir;
     this.hero.play(`walk-${dir}`, true);
 
-    const { GRID_SIZE } = GridMovementScene;
     const targetX = targetGridX * GRID_SIZE + GRID_SIZE / 2;
     const targetY = targetGridY * GRID_SIZE + GRID_SIZE / 2;
 
@@ -300,13 +376,14 @@ export class GridMovementScene extends Phaser.Scene {
     this.targetMarker.lineStyle(2, 0xfacc15, 0.9);
     this.targetMarker.strokeRect(targetGridX * GRID_SIZE + 4, targetGridY * GRID_SIZE + 4, GRID_SIZE - 8, GRID_SIZE - 8);
 
-    // HD-2D ダストトレイル（踏み出し時の土煙エフェクト）
+    // HD-2D ダストトレイル
     if (this.isHd2dEffectsEnabled) {
       this.spawnStepTrail(this.hero.x, this.hero.y + 24);
     }
 
-    this.notifyStateChange();
+    this.notifyStateChange(isScrolling);
 
+    // キャラクターの移動トゥイーン
     this.tweens.add({
       targets: this.hero,
       x: targetX,
@@ -320,9 +397,24 @@ export class GridMovementScene extends Phaser.Scene {
         this.targetMarker.clear();
 
         this.hero.play(`idle-${dir}`, true);
-        this.notifyStateChange();
+        this.notifyStateChange(false);
       }
     });
+
+    // スクロールが必要な場合、カメラも並行してトゥイーン
+    if (isScrolling) {
+      this.tweens.add({
+        targets: this.cameras.main,
+        scrollX: targetCamGridX * GRID_SIZE,
+        scrollY: targetCamGridY * GRID_SIZE,
+        duration: this.moveSpeedMs,
+        ease: 'Linear',
+        onComplete: () => {
+          this.currentCamGridX = targetCamGridX;
+          this.currentCamGridY = targetCamGridY;
+        }
+      });
+    }
 
     return true;
   }
@@ -341,13 +433,16 @@ export class GridMovementScene extends Phaser.Scene {
     });
   }
 
-  private notifyStateChange() {
+  private notifyStateChange(isScrolling: boolean = false) {
     if (this.onStateChangeCallback) {
       this.onStateChangeCallback({
         gridX: this.currentGridX,
         gridY: this.currentGridY,
+        camGridX: this.currentCamGridX,
+        camGridY: this.currentCamGridY,
         direction: this.currentDirection,
         isMoving: this.isMoving,
+        isScrolling: isScrolling,
         speedMs: this.moveSpeedMs
       });
     }
@@ -356,12 +451,16 @@ export class GridMovementScene extends Phaser.Scene {
   public resetPosition() {
     if (this.isMoving) return;
 
-    this.currentGridX = 4;
-    this.currentGridY = 4;
+    this.currentGridX = 7;
+    this.currentGridY = 7;
+    this.currentCamGridX = 4;
+    this.currentCamGridY = 4;
     const { GRID_SIZE } = GridMovementScene;
     this.hero.setPosition(this.currentGridX * GRID_SIZE + GRID_SIZE / 2, this.currentGridY * GRID_SIZE + GRID_SIZE / 2);
+    this.cameras.main.scrollX = this.currentCamGridX * GRID_SIZE;
+    this.cameras.main.scrollY = this.currentCamGridY * GRID_SIZE;
     this.hero.play('idle-down');
     this.currentDirection = 'idle';
-    this.notifyStateChange();
+    this.notifyStateChange(false);
   }
 }

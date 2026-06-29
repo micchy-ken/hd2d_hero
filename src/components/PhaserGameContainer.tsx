@@ -10,10 +10,13 @@ export const PhaserGameContainer: React.FC = () => {
 
   // UIステータス
   const [heroState, setHeroState] = useState<HeroState>({
-    gridX: 4,
-    gridY: 4,
+    gridX: 7,
+    gridY: 7,
+    camGridX: 4,
+    camGridY: 4,
     direction: 'idle',
     isMoving: false,
+    isScrolling: false,
     speedMs: 450
   });
 
@@ -27,11 +30,11 @@ export const PhaserGameContainer: React.FC = () => {
   useEffect(() => {
     if (!gameContainerRef.current) return;
 
-    // ゲームコンフィグ (トータル576x576px = 9 x 64px)
+    // ゲームコンフィグ (トータル448x448px = 7 x 64px)
     const config: Phaser.Types.Core.GameConfig = {
       type: Phaser.AUTO,
-      width: 576,
-      height: 576,
+      width: 448,
+      height: 448,
       parent: gameContainerRef.current,
       backgroundColor: '#ecfdf5',
       scene: [GridMovementScene],
@@ -116,15 +119,15 @@ export const PhaserGameContainer: React.FC = () => {
   return (
     <div className="flex flex-col xl:flex-row gap-8 items-center xl:items-start justify-center w-full max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
       
-      {/* 左側：ゲーム画面（576x576pxフレーム） */}
+      {/* 左側：ゲーム画面（448x448pxフレーム） */}
       <div className="flex flex-col items-center bg-white rounded-2xl shadow-xl border border-emerald-100 overflow-hidden p-4 sm:p-6">
         <div className="flex items-center justify-between w-full mb-4 px-2">
           <div className="flex items-center gap-2">
             <span className="inline-block w-3 h-3 rounded-full bg-emerald-500 animate-pulse" />
-            <h2 className="text-lg font-semibold text-slate-800 tracking-tight">HD-2D Stage (9x9 Grid)</h2>
+            <h2 className="text-lg font-semibold text-slate-800 tracking-tight">HD-2D Stage (7x7 View / 16x16 Field)</h2>
           </div>
           <div className="text-xs font-mono px-2.5 py-1 bg-slate-100 text-slate-600 rounded-md">
-            576 × 576 px
+            448 × 448 px
           </div>
         </div>
 
@@ -132,12 +135,12 @@ export const PhaserGameContainer: React.FC = () => {
         <div 
           ref={gameContainerRef} 
           className="rounded-lg overflow-hidden shadow-inner border-2 border-emerald-600 bg-emerald-50 select-none"
-          style={{ width: 576, height: 576 }}
+          style={{ width: 448, height: 448 }}
         />
 
         <div className="flex items-center justify-between w-full mt-4 pt-4 border-t border-slate-100 text-xs text-slate-500">
           <div>1 Grid = <span className="font-semibold text-slate-700">64 × 64 px</span></div>
-          <div>Engine = <span className="font-semibold text-slate-700">Phaser v3</span></div>
+          <div>Scroll = <span className="font-semibold text-emerald-600">Inner 5x5 Fixed</span></div>
         </div>
       </div>
 
@@ -150,20 +153,24 @@ export const PhaserGameContainer: React.FC = () => {
             <h3 className="font-semibold text-emerald-400 flex items-center gap-2">
               <Sparkles className="w-4 h-4" /> Hero Status Tracker
             </h3>
-            <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${heroState.isMoving ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'}`}>
-              {heroState.isMoving ? 'Moving...' : 'Standing'}
+            <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${heroState.isScrolling ? 'bg-sky-500/20 text-sky-300 border border-sky-500/40' : (heroState.isMoving ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40')}`}>
+              {heroState.isScrolling ? 'Scrolling...' : (heroState.isMoving ? 'Walking...' : 'Standing')}
             </span>
           </div>
 
-          <div className="grid grid-cols-2 gap-4 font-mono text-sm">
+          <div className="grid grid-cols-2 gap-3 font-mono text-sm mb-3">
             <div className="bg-slate-800/80 p-3 rounded-xl border border-slate-700/60">
-              <span className="text-xs text-slate-400 block mb-1">Grid Coordinate</span>
-              <span className="text-lg font-bold text-white">X: {heroState.gridX} / Y: {heroState.gridY}</span>
+              <span className="text-[11px] text-slate-400 block mb-1">World Coord (16x16)</span>
+              <span className="text-base font-bold text-white">X:{heroState.gridX} / Y:{heroState.gridY}</span>
             </div>
             <div className="bg-slate-800/80 p-3 rounded-xl border border-slate-700/60">
-              <span className="text-xs text-slate-400 block mb-1">Facing Direction</span>
-              <span className="text-lg font-bold uppercase text-emerald-400">{heroState.direction}</span>
+              <span className="text-[11px] text-slate-400 block mb-1">Camera Pos (TopLeft)</span>
+              <span className="text-base font-bold text-sky-300">CX:{heroState.camGridX} / CY:{heroState.camGridY}</span>
             </div>
+          </div>
+          <div className="bg-slate-800/80 p-2.5 rounded-xl border border-slate-700/60 font-mono text-xs flex items-center justify-between">
+            <span className="text-slate-400">Facing: <strong className="uppercase text-emerald-400">{heroState.direction}</strong></span>
+            <span className="text-slate-400">Deadzone: <strong className="text-white">5x5 Center</strong></span>
           </div>
         </div>
 

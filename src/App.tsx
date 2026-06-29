@@ -22,7 +22,7 @@ export default function App() {
           <div className="hidden sm:flex items-center gap-6 text-xs text-slate-600 font-medium">
             <div className="flex items-center gap-1.5 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
               <Layers className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Grid: 9 × 9 (576px)</span>
+              <span>Grid: 7 × 7 View / 16 × 16 Field</span>
             </div>
             <div className="flex items-center gap-1.5 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
               <Cpu className="w-3.5 h-3.5 text-blue-600" />
