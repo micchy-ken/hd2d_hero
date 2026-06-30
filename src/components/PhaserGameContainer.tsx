@@ -169,6 +169,70 @@ export const PhaserGameContainer: React.FC = () => {
                 ref={gameContainerRef} 
                 className="w-full h-full"
               />
+              {/* Virtual Pad / Auto Toggle Overlay */}
+              {autoMode !== 'none' ? (
+                <button
+                  onClick={() => {
+                    setAutoMode('none');
+                    sceneRef.current?.setAutoMode('none');
+                  }}
+                  className="absolute bottom-4 left-4 z-20 bg-emerald-600/80 hover:bg-emerald-600 text-white text-xs font-bold px-4 py-2 rounded-xl shadow-lg backdrop-blur-sm transition-all border border-emerald-400/50 flex items-center gap-1.5"
+                >
+                  <Play className="w-4 h-4" />
+                  AUTO
+                </button>
+              ) : (
+                <div className="absolute bottom-4 left-4 z-20">
+                  <div className="grid grid-cols-3 gap-1 bg-slate-800/60 p-2.5 rounded-2xl backdrop-blur-sm border border-white/10 shadow-lg">
+                    {/* Row 1: Up */}
+                    <div />
+                    <button 
+                      onPointerDown={() => sceneRef.current?.setVirtualInput('up', true)}
+                      onPointerUp={() => sceneRef.current?.setVirtualInput('up', false)}
+                      onPointerLeave={() => sceneRef.current?.setVirtualInput('up', false)}
+                      className="bg-white/20 hover:bg-white/30 active:bg-white/40 w-12 h-12 rounded-xl flex items-center justify-center transition-colors shadow-sm"
+                    ><ArrowUp className="w-6 h-6 text-white" /></button>
+                    <div />
+                    
+                    {/* Row 2: Left, Center, Right */}
+                    <button 
+                      onPointerDown={() => sceneRef.current?.setVirtualInput('left', true)}
+                      onPointerUp={() => sceneRef.current?.setVirtualInput('left', false)}
+                      onPointerLeave={() => sceneRef.current?.setVirtualInput('left', false)}
+                      className="bg-white/20 hover:bg-white/30 active:bg-white/40 w-12 h-12 rounded-xl flex items-center justify-center transition-colors shadow-sm"
+                    ><ArrowLeft className="w-6 h-6 text-white" /></button>
+                    <div className="w-12 h-12 flex items-center justify-center opacity-30">
+                      <div className="w-2.5 h-2.5 rounded-full bg-white" />
+                    </div>
+                    <button 
+                      onPointerDown={() => sceneRef.current?.setVirtualInput('right', true)}
+                      onPointerUp={() => sceneRef.current?.setVirtualInput('right', false)}
+                      onPointerLeave={() => sceneRef.current?.setVirtualInput('right', false)}
+                      className="bg-white/20 hover:bg-white/30 active:bg-white/40 w-12 h-12 rounded-xl flex items-center justify-center transition-colors shadow-sm"
+                    ><ArrowRight className="w-6 h-6 text-white" /></button>
+
+                    {/* Row 3: Close (✕), Down, Empty */}
+                    <button 
+                      onClick={() => {
+                        setAutoMode('seek');
+                        sceneRef.current?.setAutoMode('seek');
+                      }}
+                      className="bg-rose-600/85 hover:bg-rose-600 active:bg-rose-700 w-12 h-12 rounded-xl flex items-center justify-center transition-colors shadow-sm border border-rose-500/30"
+                      title="Return to Auto Mode"
+                    >
+                      <X className="w-5 h-5 text-white" />
+                    </button>
+                    <button 
+                      onPointerDown={() => sceneRef.current?.setVirtualInput('down', true)}
+                      onPointerUp={() => sceneRef.current?.setVirtualInput('down', false)}
+                      onPointerLeave={() => sceneRef.current?.setVirtualInput('down', false)}
+                      className="bg-white/20 hover:bg-white/30 active:bg-white/40 w-12 h-12 rounded-xl flex items-center justify-center transition-colors shadow-sm"
+                    ><ArrowDown className="w-6 h-6 text-white" /></button>
+                    <div />
+                  </div>
+                </div>
+              )}
+
               {/* アクションログオーバーレイ (最新5件) */}
               <div className="absolute bottom-2 right-2 w-64 pointer-events-none flex flex-col justify-end gap-1 z-10 p-2">
                 {logs.slice(-5).map((log) => (

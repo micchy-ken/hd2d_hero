@@ -88,6 +88,13 @@ export class GridMovementScene extends Phaser.Scene {
   private cursors?: Phaser.Types.Input.Keyboard.CursorKeys;
   private wasdKeys?: any;
 
+  // Virtual Pad Movement
+  private virtualInput = { up: false, down: false, left: false, right: false };
+
+  public setVirtualInput(dir: 'up'|'down'|'left'|'right', isDown: boolean) {
+    this.virtualInput[dir] = isDown;
+  }
+
   // Reactコールバック用
   private onStateChangeCallback?: (state: HeroState) => void;
   private onLogCallback?: (log: ActionLog) => void;
@@ -322,10 +329,10 @@ export class GridMovementScene extends Phaser.Scene {
     if (this.autoMode === 'none' && !this.isMoving) {
       let moved = false;
       
-      const up = this.cursors?.up.isDown || this.wasdKeys?.W.isDown;
-      const down = this.cursors?.down.isDown || this.wasdKeys?.S.isDown;
-      const left = this.cursors?.left.isDown || this.wasdKeys?.A.isDown;
-      const right = this.cursors?.right.isDown || this.wasdKeys?.D.isDown;
+      const up = this.cursors?.up.isDown || this.wasdKeys?.W.isDown || this.virtualInput.up;
+      const down = this.cursors?.down.isDown || this.wasdKeys?.S.isDown || this.virtualInput.down;
+      const left = this.cursors?.left.isDown || this.wasdKeys?.A.isDown || this.virtualInput.left;
+      const right = this.cursors?.right.isDown || this.wasdKeys?.D.isDown || this.virtualInput.right;
 
       if (this.allow8Way) {
         if (up && left) {
