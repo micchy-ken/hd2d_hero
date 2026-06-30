@@ -9,11 +9,12 @@ import Phaser from 'phaser';
  * 2: Left (左向き)
  * 3: Right (右向き)
  */
-export function generateHeroSpritesheet(scene: Phaser.Scene): string {
-  const textureKey = 'hero_spritesheet';
+export function generateHeroSpritesheet(scene: Phaser.Scene, isTextMode: boolean = false): string {
+  const textureKey = isTextMode ? 'hero_spritesheet_text' : 'hero_spritesheet';
 
   if (scene.textures.exists(textureKey)) {
-    scene.textures.remove(textureKey);
+    // If it exists, just return the key
+    return textureKey;
   }
 
   const frameWidth = 64;
@@ -27,6 +28,21 @@ export function generateHeroSpritesheet(scene: Phaser.Scene): string {
   const ctx = canvas.getContext('2d')!;
 
   ctx.imageSmoothingEnabled = false;
+
+  if (isTextMode) {
+    ctx.fillStyle = '#ffffff';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = 'bold 40px "Inter", sans-serif';
+
+    for (let dir = 0; dir < rows; dir++) {
+      for (let frame = 0; frame < cols; frame++) {
+        const ox = frame * frameWidth + frameWidth / 2;
+        const oy = dir * frameHeight + frameHeight / 2;
+        ctx.fillText('勇', ox, oy);
+      }
+    }
+  } else {
 
   // HD-2D用リッチカラーパレット（ハイライト・コア・シャドウの多層シェーディング）
   const palette = {
@@ -400,6 +416,7 @@ export function generateHeroSpritesheet(scene: Phaser.Scene): string {
       ctx.restore(); // 座標 restore
     }
   }
+  } // <--- Added closing brace for else block
 
   // Phaserテクスチャへ登録
   scene.textures.addSpriteSheet(textureKey, canvas as unknown as HTMLImageElement, {

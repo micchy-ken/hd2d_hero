@@ -1,10 +1,10 @@
 import Phaser from 'phaser';
 
-export function generateSlimeSpritesheet(scene: Phaser.Scene): string {
-  const textureKey = 'slime_spritesheet';
+export function generateSlimeSpritesheet(scene: Phaser.Scene, isTextMode: boolean = false): string {
+  const textureKey = isTextMode ? 'slime_spritesheet_text' : 'slime_spritesheet';
 
   if (scene.textures.exists(textureKey)) {
-    scene.textures.remove(textureKey);
+    return textureKey;
   }
 
   const frameWidth = 64;
@@ -17,6 +17,19 @@ export function generateSlimeSpritesheet(scene: Phaser.Scene): string {
   const ctx = canvas.getContext('2d')!;
 
   ctx.imageSmoothingEnabled = false;
+
+  if (isTextMode) {
+    ctx.fillStyle = '#ffffff'; // 白文字で「敵」
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = 'bold 40px "Inter", sans-serif';
+
+    for (let frame = 0; frame < frames; frame++) {
+      const ox = frame * frameWidth + frameWidth / 2;
+      const oy = frameHeight / 2;
+      ctx.fillText('敵', ox, oy);
+    }
+  } else {
 
   const palette = {
     highlight: '#a5f3fc',
@@ -114,6 +127,7 @@ export function generateSlimeSpritesheet(scene: Phaser.Scene): string {
 
     ctx.restore();
   }
+  } // <--- Added closing brace for else block
 
   scene.textures.addSpriteSheet(textureKey, canvas as unknown as HTMLImageElement, {
     frameWidth: frameWidth,

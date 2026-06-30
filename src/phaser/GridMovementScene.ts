@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { generateHeroSpritesheet } from './HeroSpritesheet';
 import { generateSlimeSpritesheet } from './MonsterSpritesheets';
 
-export type Direction = 'up' | 'down' | 'left' | 'right' | 'idle';
+export type Direction = 'up' | 'down' | 'left' | 'right' | 'up-left' | 'up-right' | 'down-left' | 'down-right' | 'idle';
 
 export interface HeroState {
   gridX: number;
@@ -51,6 +51,10 @@ export class GridMovementScene extends Phaser.Scene {
   private hd2dLighting!: Phaser.GameObjects.Graphics;
   private vignetteOverlay!: Phaser.GameObjects.Graphics;
   private particleMotes!: Phaser.GameObjects.Arc[];
+  private grassBgImage?: Phaser.GameObjects.Image;
+  private useGrassBg: boolean = true;
+  private allow8Way: boolean = true;
+  private isTextMode: boolean = false;
   private slimes: SlimeData[] = [];
 
   // 状態管理
@@ -112,8 +116,11 @@ export class GridMovementScene extends Phaser.Scene {
   }
 
   preload() {
-    generateHeroSpritesheet(this);
-    generateSlimeSpritesheet(this);
+    this.load.image('grass_bg', '/grass_bg_1782776475818.jpg');
+    generateHeroSpritesheet(this, false);
+    generateHeroSpritesheet(this, true);
+    generateSlimeSpritesheet(this, false);
+    generateSlimeSpritesheet(this, true);
   }
 
   create() {
@@ -124,7 +131,9 @@ export class GridMovementScene extends Phaser.Scene {
     this.cameras.main.scrollX = this.currentCamGridX * GRID_SIZE;
     this.cameras.main.scrollY = this.currentCamGridY * GRID_SIZE;
 
-    // 1. 背景グリッドとタイルの作成
+    // 1. 背景画像とグリッドの作成
+    this.grassBgImage = this.add.image(0, 0, 'grass_bg').setOrigin(0, 0);
+    this.grassBgImage.setDepth(-1);
     this.createGridBackground();
 
     // 2. HD-2D 環境光＆ゴッドレイ風オーバーレイ (カメラ固定)
@@ -147,6 +156,8 @@ export class GridMovementScene extends Phaser.Scene {
 
     dirs.forEach(({ key, row }) => {
       const startFrame = row * 4;
+      
+      // normal textures
       this.anims.create({
         key: `walk-${key}`,
         frames: this.anims.generateFrameNumbers('hero_spritesheet', {
@@ -160,6 +171,23 @@ export class GridMovementScene extends Phaser.Scene {
       this.anims.create({
         key: `idle-${key}`,
         frames: [{ key: 'hero_spritesheet', frame: startFrame }],
+        frameRate: 1
+      });
+
+      // text mode textures
+      this.anims.create({
+        key: `walk-${key}-text`,
+        frames: this.anims.generateFrameNumbers('hero_spritesheet_text', {
+          start: startFrame,
+          end: startFrame + 3
+        }),
+        frameRate: 8,
+        repeat: -1
+      });
+
+      this.anims.create({
+        key: `idle-${key}-text`,
+        frames: [{ key: 'hero_spritesheet_text', frame: startFrame }],
         frameRate: 1
       });
     });
@@ -182,13 +210,31 @@ export class GridMovementScene extends Phaser.Scene {
       frameRate: 1
     });
 
+    // スライムのアニメーション (text mode)
+    this.anims.create({
+      key: 'slime-idle-text',
+      frames: [{ key: 'slime_spritesheet_text', frame: 0 }],
+      frameRate: 1
+    });
+    this.anims.create({
+      key: 'slime-shake-text',
+      frames: this.anims.generateFrameNumbers('slime_spritesheet_text', { start: 1, end: 2 }),
+      frameRate: 12,
+      repeat: -1
+    });
+    this.anims.create({
+      key: 'slime-jump-text',
+      frames: [{ key: 'slime_spritesheet_text', frame: 3 }],
+      frameRate: 1
+    });
+
     // 5. 勇者スプライト配置
     const startX = this.currentGridX * GRID_SIZE + GRID_SIZE / 2;
     const startY = this.currentGridY * GRID_SIZE + GRID_SIZE / 2;
 
     this.hero = this.add.sprite(startX, startY, 'hero_spritesheet', 0);
     this.hero.setDepth(10);
-    this.hero.play('idle-down');
+    this.hero.play(this.getAnimKey('idle-down'));
 
     // 5.5. スライムの配置
     this.slimes = [];
@@ -197,7 +243,7 @@ export class GridMovementScene extends Phaser.Scene {
       const sy = Phaser.Math.Between(2, GRID_ROWS - 3);
       const slimeSprite = this.add.sprite(sx * GRID_SIZE + GRID_SIZE / 2, sy * GRID_SIZE + GRID_SIZE / 2, 'slime_spritesheet', 0);
       slimeSprite.setDepth(9); // 勇者より少し奥
-      slimeSprite.play('slime-idle');
+      slimeSprite.play(this.getAnimKey('slime-idle'));
       
       this.slimes.push({
         id: `slime-${Math.random().toString(36).substring(2, 9)}`,
@@ -276,26 +322,53 @@ export class GridMovementScene extends Phaser.Scene {
     if (this.autoMode === 'none' && !this.isMoving) {
       let moved = false;
       
-      if (this.cursors?.up.isDown || this.wasdKeys?.W.isDown) {
-        this.pointerTargetGridX = null;
-        this.pointerTargetGridY = null;
-        this.moveInDirection('up');
-        moved = true;
-      } else if (this.cursors?.down.isDown || this.wasdKeys?.S.isDown) {
-        this.pointerTargetGridX = null;
-        this.pointerTargetGridY = null;
-        this.moveInDirection('down');
-        moved = true;
-      } else if (this.cursors?.left.isDown || this.wasdKeys?.A.isDown) {
-        this.pointerTargetGridX = null;
-        this.pointerTargetGridY = null;
-        this.moveInDirection('left');
-        moved = true;
-      } else if (this.cursors?.right.isDown || this.wasdKeys?.D.isDown) {
-        this.pointerTargetGridX = null;
-        this.pointerTargetGridY = null;
-        this.moveInDirection('right');
-        moved = true;
+      const up = this.cursors?.up.isDown || this.wasdKeys?.W.isDown;
+      const down = this.cursors?.down.isDown || this.wasdKeys?.S.isDown;
+      const left = this.cursors?.left.isDown || this.wasdKeys?.A.isDown;
+      const right = this.cursors?.right.isDown || this.wasdKeys?.D.isDown;
+
+      if (this.allow8Way) {
+        if (up && left) {
+          this.pointerTargetGridX = null;
+          this.pointerTargetGridY = null;
+          this.moveInDirection('up-left');
+          moved = true;
+        } else if (up && right) {
+          this.pointerTargetGridX = null;
+          this.pointerTargetGridY = null;
+          this.moveInDirection('up-right');
+          moved = true;
+        } else if (down && left) {
+          this.pointerTargetGridX = null;
+          this.pointerTargetGridY = null;
+          this.moveInDirection('down-left');
+          moved = true;
+        } else if (down && right) {
+          this.pointerTargetGridX = null;
+          this.pointerTargetGridY = null;
+          this.moveInDirection('down-right');
+          moved = true;
+        }
+      }
+
+      if (!moved) {
+        if (up) {
+          this.pointerTargetGridX = null;
+          this.pointerTargetGridY = null;
+          this.moveInDirection('up');
+        } else if (down) {
+          this.pointerTargetGridX = null;
+          this.pointerTargetGridY = null;
+          this.moveInDirection('down');
+        } else if (left) {
+          this.pointerTargetGridX = null;
+          this.pointerTargetGridY = null;
+          this.moveInDirection('left');
+        } else if (right) {
+          this.pointerTargetGridX = null;
+          this.pointerTargetGridY = null;
+          this.moveInDirection('right');
+        }
       }
     }
   }
@@ -330,6 +403,42 @@ export class GridMovementScene extends Phaser.Scene {
   private drawGrid() {
     const { GRID_SIZE, GRID_COLS, GRID_ROWS } = GridMovementScene;
     this.gridGraphics.clear();
+
+    if (this.grassBgImage) {
+      this.grassBgImage.setVisible(this.isTextMode ? false : this.useGrassBg);
+    }
+
+    if (this.isTextMode) {
+      if (this.showGridLines) {
+        this.gridGraphics.lineStyle(1, 0xffffff, 0.3);
+        for (let i = 0; i <= GRID_ROWS; i++) {
+          this.gridGraphics.moveTo(0, i * GRID_SIZE);
+          this.gridGraphics.lineTo(GRID_COLS * GRID_SIZE, i * GRID_SIZE);
+        }
+        for (let i = 0; i <= GRID_COLS; i++) {
+          this.gridGraphics.moveTo(i * GRID_SIZE, 0);
+          this.gridGraphics.lineTo(i * GRID_SIZE, GRID_ROWS * GRID_SIZE);
+        }
+        this.gridGraphics.strokePath();
+      }
+      return;
+    }
+
+    if (this.useGrassBg) {
+      if (this.showGridLines) {
+        this.gridGraphics.lineStyle(1, 0xffffff, 0.15);
+        for (let i = 0; i <= GRID_ROWS; i++) {
+          this.gridGraphics.moveTo(0, i * GRID_SIZE);
+          this.gridGraphics.lineTo(GRID_COLS * GRID_SIZE, i * GRID_SIZE);
+        }
+        for (let i = 0; i <= GRID_COLS; i++) {
+          this.gridGraphics.moveTo(i * GRID_SIZE, 0);
+          this.gridGraphics.lineTo(i * GRID_SIZE, GRID_ROWS * GRID_SIZE);
+        }
+        this.gridGraphics.strokePath();
+      }
+      return;
+    }
 
     // HD-2D風 深みのある森の芝生タイル（微細な濃淡トーン）
     for (let row = 0; row < GRID_ROWS; row++) {
@@ -418,6 +527,33 @@ export class GridMovementScene extends Phaser.Scene {
     this.vignetteOverlay.fillRect(totalW - frameSize, frameSize, frameSize, totalH - frameSize * 2);
   }
 
+  private getAnimKey(baseKey: string): string {
+    return this.isTextMode ? `${baseKey}-text` : baseKey;
+  }
+
+  public toggleTextMode(enabled?: boolean) {
+    this.isTextMode = enabled !== undefined ? enabled : !this.isTextMode;
+    
+    // 背景色の変更
+    if (this.isTextMode) {
+      this.cameras.main.setBackgroundColor('#000000');
+    } else {
+      this.cameras.main.setBackgroundColor('#ecfdf5'); // default background color from container
+    }
+
+    // テクスチャの変更
+    const heroTexture = this.isTextMode ? 'hero_spritesheet_text' : 'hero_spritesheet';
+    this.hero.setTexture(heroTexture);
+    
+    const slimeTexture = this.isTextMode ? 'slime_spritesheet_text' : 'slime_spritesheet';
+    this.slimes.forEach(slime => {
+      slime.sprite.setTexture(slimeTexture);
+    });
+
+    // 描画の更新
+    this.drawGrid();
+  }
+
   public toggleGridLines(show?: boolean) {
     this.showGridLines = show !== undefined ? show : !this.showGridLines;
     this.drawGrid();
@@ -429,6 +565,15 @@ export class GridMovementScene extends Phaser.Scene {
     this.drawHd2dLighting();
     this.drawVignette();
     this.particleMotes.forEach(m => m.setVisible(this.isHd2dEffectsEnabled));
+  }
+
+  public toggleGrassBg(enabled?: boolean) {
+    this.useGrassBg = enabled !== undefined ? enabled : !this.useGrassBg;
+    this.drawGrid();
+  }
+
+  public toggle8WayMode(enabled?: boolean) {
+    this.allow8Way = enabled !== undefined ? enabled : !this.allow8Way;
   }
 
   public setAutoMode(mode: 'none' | 'random' | 'seek') {
@@ -457,10 +602,21 @@ export class GridMovementScene extends Phaser.Scene {
             this.pointerTargetGridY = null;
           } else {
             const possibleDirs: Direction[] = [];
-            if (dx > 0) possibleDirs.push('right');
-            else if (dx < 0) possibleDirs.push('left');
-            if (dy > 0) possibleDirs.push('down');
-            else if (dy < 0) possibleDirs.push('up');
+            if (this.allow8Way) {
+              if (dx > 0 && dy > 0) possibleDirs.push('down-right');
+              else if (dx > 0 && dy < 0) possibleDirs.push('up-right');
+              else if (dx < 0 && dy > 0) possibleDirs.push('down-left');
+              else if (dx < 0 && dy < 0) possibleDirs.push('up-left');
+              else if (dx > 0) possibleDirs.push('right');
+              else if (dx < 0) possibleDirs.push('left');
+              else if (dy > 0) possibleDirs.push('down');
+              else if (dy < 0) possibleDirs.push('up');
+            } else {
+              if (dx > 0) possibleDirs.push('right');
+              else if (dx < 0) possibleDirs.push('left');
+              if (dy > 0) possibleDirs.push('down');
+              else if (dy < 0) possibleDirs.push('up');
+            }
             
             if (possibleDirs.length > 0) {
               const nextDir = Phaser.Utils.Array.GetRandom(possibleDirs);
@@ -480,7 +636,7 @@ export class GridMovementScene extends Phaser.Scene {
         const { GRID_SIZE } = GridMovementScene;
         const slimeSprite = this.add.sprite(sx * GRID_SIZE + GRID_SIZE / 2, sy * GRID_SIZE + GRID_SIZE / 2, 'slime_spritesheet', 0);
         slimeSprite.setDepth(9);
-        slimeSprite.play('slime-idle');
+        slimeSprite.play(this.getAnimKey('slime-idle'));
         
         this.slimes.push({
           id: `slime-${Math.random().toString(36).substring(2, 9)}`,
@@ -517,11 +673,24 @@ export class GridMovementScene extends Phaser.Scene {
             const possibleDirs: Direction[] = [];
             const sx = closestSlime.gridX;
             const sy = closestSlime.gridY;
+            const dx = sx - this.currentGridX;
+            const dy = sy - this.currentGridY;
 
-            if (this.currentGridX > sx) possibleDirs.push('left');
-            if (this.currentGridX < sx) possibleDirs.push('right');
-            if (this.currentGridY > sy) possibleDirs.push('up');
-            if (this.currentGridY < sy) possibleDirs.push('down');
+            if (this.allow8Way) {
+              if (dx > 0 && dy > 0) possibleDirs.push('down-right');
+              else if (dx > 0 && dy < 0) possibleDirs.push('up-right');
+              else if (dx < 0 && dy > 0) possibleDirs.push('down-left');
+              else if (dx < 0 && dy < 0) possibleDirs.push('up-left');
+              else if (dx > 0) possibleDirs.push('right');
+              else if (dx < 0) possibleDirs.push('left');
+              else if (dy > 0) possibleDirs.push('down');
+              else if (dy < 0) possibleDirs.push('up');
+            } else {
+              if (dx > 0) possibleDirs.push('right');
+              else if (dx < 0) possibleDirs.push('left');
+              if (dy > 0) possibleDirs.push('down');
+              else if (dy < 0) possibleDirs.push('up');
+            }
 
             if (possibleDirs.length > 0) {
               // 複数ある場合はランダムに一つ選ぶ
@@ -563,6 +732,13 @@ export class GridMovementScene extends Phaser.Scene {
     if (this.currentGridY < GridMovementScene.GRID_ROWS - 1) possibleDirs.push('down');
     if (this.currentGridX > 0) possibleDirs.push('left');
     if (this.currentGridX < GridMovementScene.GRID_COLS - 1) possibleDirs.push('right');
+    
+    if (this.allow8Way) {
+      if (this.currentGridY > 0 && this.currentGridX > 0) possibleDirs.push('up-left');
+      if (this.currentGridY > 0 && this.currentGridX < GridMovementScene.GRID_COLS - 1) possibleDirs.push('up-right');
+      if (this.currentGridY < GridMovementScene.GRID_ROWS - 1 && this.currentGridX > 0) possibleDirs.push('down-left');
+      if (this.currentGridY < GridMovementScene.GRID_ROWS - 1 && this.currentGridX < GridMovementScene.GRID_COLS - 1) possibleDirs.push('down-right');
+    }
 
     if (possibleDirs.length > 0) {
       const nextDir = Phaser.Utils.Array.GetRandom(possibleDirs);
@@ -614,7 +790,7 @@ export class GridMovementScene extends Phaser.Scene {
       duration: 100,
       yoyo: true,
       onComplete: () => {
-        this.hero.play(`idle-${this.currentDirection}`, true);
+        this.hero.play(this.getAnimKey(`idle-${this.currentDirection}`), true);
         this.isMoving = false;
 
         if (slime.hp <= 0) {
@@ -651,7 +827,7 @@ export class GridMovementScene extends Phaser.Scene {
 
   private performSlimeAttack(slime: SlimeData) {
     slime.isMoving = true;
-    slime.sprite.play('slime-jump');
+    slime.sprite.play(this.getAnimKey('slime-jump'));
 
     const origX = slime.sprite.x;
     const origY = slime.sprite.y;
@@ -666,7 +842,7 @@ export class GridMovementScene extends Phaser.Scene {
       yoyo: true,
       onComplete: () => {
         if (slime.sprite && slime.sprite.active) {
-          slime.sprite.play('slime-idle');
+          slime.sprite.play(this.getAnimKey('slime-idle'));
         }
         slime.isMoving = false;
         
@@ -713,6 +889,10 @@ export class GridMovementScene extends Phaser.Scene {
       case 'down': targetGridY += 1; break;
       case 'left': targetGridX -= 1; break;
       case 'right': targetGridX += 1; break;
+      case 'up-left': targetGridY -= 1; targetGridX -= 1; break;
+      case 'up-right': targetGridY -= 1; targetGridX += 1; break;
+      case 'down-left': targetGridY += 1; targetGridX -= 1; break;
+      case 'down-right': targetGridY += 1; targetGridX += 1; break;
     }
 
     // 勇者への攻撃判定
@@ -727,7 +907,7 @@ export class GridMovementScene extends Phaser.Scene {
     slime.isMoving = true;
     slime.targetGridX = targetGridX;
     slime.targetGridY = targetGridY;
-    slime.sprite.play('slime-shake'); // プルプル震える
+    slime.sprite.play(this.getAnimKey('slime-shake')); // プルプル震える
 
     const { GRID_SIZE } = GridMovementScene;
     const targetX = targetGridX * GRID_SIZE + GRID_SIZE / 2;
@@ -739,7 +919,7 @@ export class GridMovementScene extends Phaser.Scene {
 
     this.time.delayedCall(shakeDuration, () => {
       if (!slime.sprite || !slime.sprite.active) return;
-      slime.sprite.play('slime-jump'); // 移動中のフレーム
+      slime.sprite.play(this.getAnimKey('slime-jump')); // 移動中のフレーム
       this.tweens.add({
         targets: slime.sprite,
         x: targetX,
@@ -753,7 +933,7 @@ export class GridMovementScene extends Phaser.Scene {
           slime.targetGridY = undefined;
           slime.isMoving = false;
           if (slime.sprite && slime.sprite.active) {
-            slime.sprite.play('slime-idle');
+            slime.sprite.play(this.getAnimKey('slime-idle'));
           }
         }
       });
@@ -771,6 +951,10 @@ export class GridMovementScene extends Phaser.Scene {
       case 'down': targetGridY += 1; break;
       case 'left': targetGridX -= 1; break;
       case 'right': targetGridX += 1; break;
+      case 'up-left': targetGridY -= 1; targetGridX -= 1; break;
+      case 'up-right': targetGridY -= 1; targetGridX += 1; break;
+      case 'down-left': targetGridY += 1; targetGridX -= 1; break;
+      case 'down-right': targetGridY += 1; targetGridX += 1; break;
     }
 
     if (
@@ -791,7 +975,14 @@ export class GridMovementScene extends Phaser.Scene {
     if (targetSlimeIndex !== -1) {
       this.isMoving = true;
       this.currentDirection = dir;
-      this.hero.play(`walk-${dir}`, true);
+      
+      let animDir = 'down';
+      if (dir.includes('left')) animDir = 'left';
+      else if (dir.includes('right')) animDir = 'right';
+      else if (dir.includes('up')) animDir = 'up';
+      else if (dir.includes('down')) animDir = 'down';
+      
+      this.hero.play(this.getAnimKey(`walk-${animDir}`), true);
       this.performAttack(targetSlimeIndex);
       return true;
     }
@@ -836,7 +1027,15 @@ export class GridMovementScene extends Phaser.Scene {
     this.heroTargetGridX = targetGridX;
     this.heroTargetGridY = targetGridY;
     this.currentDirection = dir;
-    this.hero.play(`walk-${dir}`, true);
+    
+    // アニメーション用の方向を決定
+    let animDir = 'down';
+    if (dir.includes('left')) animDir = 'left';
+    else if (dir.includes('right')) animDir = 'right';
+    else if (dir.includes('up')) animDir = 'up';
+    else if (dir.includes('down')) animDir = 'down';
+    
+    this.hero.play(this.getAnimKey(`walk-${animDir}`), true);
 
     const targetX = targetGridX * GRID_SIZE + GRID_SIZE / 2;
     const targetY = targetGridY * GRID_SIZE + GRID_SIZE / 2;
@@ -868,7 +1067,7 @@ export class GridMovementScene extends Phaser.Scene {
         this.isMoving = false;
         this.targetMarker.clear();
 
-        this.hero.play(`idle-${dir}`, true);
+        this.hero.play(this.getAnimKey(`idle-${animDir}`), true);
         this.notifyStateChange(false);
       }
     });
@@ -936,7 +1135,7 @@ export class GridMovementScene extends Phaser.Scene {
     this.hero.setPosition(this.currentGridX * GRID_SIZE + GRID_SIZE / 2, this.currentGridY * GRID_SIZE + GRID_SIZE / 2);
     this.cameras.main.scrollX = this.currentCamGridX * GRID_SIZE;
     this.cameras.main.scrollY = this.currentCamGridY * GRID_SIZE;
-    this.hero.play('idle-down');
+    this.hero.play(this.getAnimKey('idle-down'));
     this.currentDirection = 'idle';
     this.notifyStateChange(false);
   }

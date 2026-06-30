@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import Phaser from 'phaser';
 import { GridMovementScene, HeroState, Direction, ActionLog } from '../phaser/GridMovementScene';
-import { Play, Pause, RotateCcw, Eye, EyeOff, Sparkles, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Gauge, Grid, Image as ImageIcon, Heart, Sword, Star, Settings, X } from 'lucide-react';
+import { Play, Pause, RotateCcw, Eye, EyeOff, Sparkles, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Gauge, Grid, Image as ImageIcon, Heart, Sword, Star, Settings, X, Move } from 'lucide-react';
 
 export const PhaserGameContainer: React.FC = () => {
   const gameContainerRef = useRef<HTMLDivElement>(null);
@@ -30,6 +30,9 @@ export const PhaserGameContainer: React.FC = () => {
   const [autoMode, setAutoMode] = useState<'none' | 'random' | 'seek'>('seek');
   const [showGrid, setShowGrid] = useState<boolean>(true);
   const [isHd2d, setIsHd2d] = useState<boolean>(true);
+  const [useGrassBg, setUseGrassBg] = useState<boolean>(true);
+  const [allow8Way, setAllow8Way] = useState<boolean>(true);
+  const [isTextMode, setIsTextMode] = useState<boolean>(false);
   const [speed, setSpeed] = useState<number>(450);
   const [showSpritesheetModal, setShowSpritesheetModal] = useState<boolean>(false);
   const [spritesheetUrl, setSpritesheetUrl] = useState<string>('');
@@ -51,6 +54,10 @@ export const PhaserGameContainer: React.FC = () => {
       render: {
         pixelArt: true,
         antialias: false
+      },
+      audio: {
+        disableWebAudio: true,
+        noAudio: true
       }
     };
 
@@ -107,10 +114,28 @@ export const PhaserGameContainer: React.FC = () => {
     sceneRef.current?.toggleGridLines(nextVal);
   };
 
+  const toggleGrassBg = () => {
+    const nextVal = !useGrassBg;
+    setUseGrassBg(nextVal);
+    sceneRef.current?.toggleGrassBg(nextVal);
+  };
+
+  const toggle8Way = () => {
+    const nextVal = !allow8Way;
+    setAllow8Way(nextVal);
+    sceneRef.current?.toggle8WayMode(nextVal);
+  };
+
   const toggleHd2d = () => {
     const nextVal = !isHd2d;
     setIsHd2d(nextVal);
     sceneRef.current?.toggleHd2dEffects(nextVal);
+  };
+
+  const toggleTextMode = () => {
+    const nextVal = !isTextMode;
+    setIsTextMode(nextVal);
+    sceneRef.current?.toggleTextMode(nextVal);
   };
 
   const handleSpeedChange = (newSpeed: number) => {
@@ -250,6 +275,18 @@ export const PhaserGameContainer: React.FC = () => {
           {/* ユーティリティボタン群 */}
           <div className="grid grid-cols-2 gap-3 pt-2">
             <button
+              onClick={toggleGrassBg}
+              className={`flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl border text-xs font-medium transition-colors ${
+                useGrassBg 
+                  ? 'bg-emerald-50 border-emerald-300 text-emerald-700' 
+                  : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              <ImageIcon className="w-3.5 h-3.5" />
+              {useGrassBg ? 'Grass Bg ON' : 'Grass Bg OFF'}
+            </button>
+
+            <button
               onClick={toggleGrid}
               className={`flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl border text-xs font-medium transition-colors ${
                 showGrid 
@@ -271,6 +308,30 @@ export const PhaserGameContainer: React.FC = () => {
             >
               <Sparkles className="w-3.5 h-3.5 text-amber-500" />
               {isHd2d ? 'HD-2D FX ON' : 'HD-2D FX OFF'}
+            </button>
+            
+            <button
+              onClick={toggle8Way}
+              className={`flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl border text-xs font-medium transition-colors ${
+                allow8Way 
+                  ? 'bg-indigo-50 border-indigo-300 text-indigo-700 font-semibold' 
+                  : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              <Move className="w-3.5 h-3.5" />
+              {allow8Way ? '8-Way Move' : '4-Way Move'}
+            </button>
+
+            <button
+              onClick={toggleTextMode}
+              className={`flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl border text-xs font-medium transition-colors ${
+                isTextMode 
+                  ? 'bg-slate-800 border-slate-900 text-white font-semibold' 
+                  : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              <Eye className="w-3.5 h-3.5" />
+              {isTextMode ? 'Text Mode ON' : 'Text Mode OFF'}
             </button>
 
             <button
