@@ -116,7 +116,7 @@ export class GridMovementScene extends Phaser.Scene {
   }
 
   preload() {
-    this.load.image('grass_bg', '/grass_bg_1782776475818.jpg');
+    this.load.image('grass_bg', import.meta.env.BASE_URL + 'grass_bg_1782776475818.jpg');
     generateHeroSpritesheet(this, false);
     generateHeroSpritesheet(this, true);
     generateSlimeSpritesheet(this, false);
