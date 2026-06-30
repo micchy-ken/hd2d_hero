@@ -1,7 +1,8 @@
 import Phaser from 'phaser';
 import { generateHeroSpritesheet } from './HeroSpritesheet';
 import { generateSlimeSpritesheet } from './MonsterSpritesheets';
-const grassBgUrl = '/grass_bg_1782776475818.jpg';
+// @ts-ignore
+import grassBgUrl from '../../public/grass_bg_1782776475818.jpg';
 
 export type Direction = 'up' | 'down' | 'left' | 'right' | 'up-left' | 'up-right' | 'down-left' | 'down-right' | 'idle';
 
