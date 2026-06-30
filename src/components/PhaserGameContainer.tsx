@@ -7,6 +7,7 @@ export const PhaserGameContainer: React.FC = () => {
   const gameContainerRef = useRef<HTMLDivElement>(null);
   const gameInstanceRef = useRef<Phaser.Game | null>(null);
   const sceneRef = useRef<GridMovementScene | null>(null);
+  const lastLevelRef = useRef<number>(1);
 
   // UIステータス
   const [showSettings, setShowSettings] = useState(false);
@@ -29,11 +30,11 @@ export const PhaserGameContainer: React.FC = () => {
   const [logs, setLogs] = useState<ActionLog[]>([]);
   const [autoMode, setAutoMode] = useState<'none' | 'random' | 'seek'>('seek');
   const [showGrid, setShowGrid] = useState<boolean>(true);
-  const [isHd2d, setIsHd2d] = useState<boolean>(true);
+  const [isHd2d, setIsHd2d] = useState<boolean>(false);
   const [useGrassBg, setUseGrassBg] = useState<boolean>(true);
-  const [allow8Way, setAllow8Way] = useState<boolean>(true);
-  const [isTextMode, setIsTextMode] = useState<boolean>(false);
-  const [speed, setSpeed] = useState<number>(450);
+  const [allow8Way, setAllow8Way] = useState<boolean>(false);
+  const [displayMode, setDisplayMode] = useState<'normal' | 'text' | 'grayscale'>('text');
+  const [speed, setSpeed] = useState<number>(1000);
   const [showSpritesheetModal, setShowSpritesheetModal] = useState<boolean>(false);
   const [spritesheetUrl, setSpritesheetUrl] = useState<string>('');
 
@@ -69,8 +70,56 @@ export const PhaserGameContainer: React.FC = () => {
       const scene = game.scene.getScene('GridMovementScene') as GridMovementScene;
       if (scene) {
         sceneRef.current = scene;
+        lastLevelRef.current = 1;
         scene.setOnStateChange((newState) => {
           setHeroState(newState);
+
+          if (newState.level !== lastLevelRef.current) {
+            const prevLevel = lastLevelRef.current;
+            lastLevelRef.current = newState.level;
+
+            // 自動デモンストレーション切り替え
+            if (newState.level === 3) {
+              setDisplayMode('grayscale');
+              setSpeed(800);
+              scene.setDisplayMode('grayscale');
+              scene.setSpeed(800);
+              scene.sendLog('【デモ】レベル3：グレースケール(32x32画質)・速度800msに自動切り替えしました！', 'system');
+            } else if (newState.level === 6) {
+              setDisplayMode('normal');
+              setUseGrassBg(false);
+              scene.setDisplayMode('normal');
+              scene.toggleGrassBg(false);
+              scene.sendLog('【デモ】レベル6：HD-2Dモード・GrassBGオフに自動切り替えしました！', 'system');
+            } else if (newState.level === 8) {
+              setAllow8Way(true);
+              setSpeed(450);
+              setUseGrassBg(true);
+              setIsHd2d(true);
+              setDisplayMode('normal');
+              
+              scene.toggle8WayMode(true);
+              scene.setSpeed(450);
+              scene.toggleGrassBg(true);
+              scene.toggleHd2dEffects(true);
+              scene.setDisplayMode('normal');
+              scene.sendLog('【デモ】レベル8：8方向移動・速度450ms・FX & GrassBGオン（フルスペック）に自動切り替えしました！', 'system');
+            } else if (newState.level === 1 && prevLevel > 1) {
+              // レベル1へのリセット処理
+              setDisplayMode('text');
+              setSpeed(1000);
+              setAllow8Way(false);
+              setIsHd2d(false);
+              setUseGrassBg(true);
+
+              scene.setDisplayMode('text');
+              scene.setSpeed(1000);
+              scene.toggle8WayMode(false);
+              scene.toggleHd2dEffects(false);
+              scene.toggleGrassBg(true);
+              scene.sendLog('【デモ】レベル1：初期のテキストモード（4方向・1000ms・FXオフ）に自動リセットしました！', 'system');
+            }
+          }
         });
         
         scene.setOnLog((newLog) => {
@@ -132,10 +181,29 @@ export const PhaserGameContainer: React.FC = () => {
     sceneRef.current?.toggleHd2dEffects(nextVal);
   };
 
-  const toggleTextMode = () => {
-    const nextVal = !isTextMode;
-    setIsTextMode(nextVal);
-    sceneRef.current?.toggleTextMode(nextVal);
+  const isTextMode = displayMode === 'text';
+
+  const handleDisplayModeChange = (mode: 'normal' | 'text' | 'grayscale') => {
+    setDisplayMode(mode);
+    sceneRef.current?.setDisplayMode(mode);
+  };
+
+  const openSpritesheetModal = () => {
+    const game = gameInstanceRef.current;
+    if (game) {
+      let textureKey = 'hero_spritesheet';
+      if (displayMode === 'text') textureKey = 'hero_spritesheet_text';
+      else if (displayMode === 'grayscale') textureKey = 'hero_spritesheet_gray';
+
+      if (game.textures.exists(textureKey)) {
+        const texture = game.textures.get(textureKey);
+        const sourceImage = texture.getSourceImage() as HTMLCanvasElement;
+        if (sourceImage && sourceImage.toDataURL) {
+          setSpritesheetUrl(sourceImage.toDataURL());
+        }
+      }
+    }
+    setShowSpritesheetModal(true);
   };
 
   const handleSpeedChange = (newSpeed: number) => {
@@ -280,6 +348,35 @@ export const PhaserGameContainer: React.FC = () => {
                 </div>
               </div>
             </div>
+
+            {/* デモ自動切替用のレベル調整ショートカット */}
+            <div className="w-full mt-3 p-3 bg-slate-900 border border-slate-700/40 rounded-xl flex items-center justify-between text-xs font-mono">
+              <div className="flex items-center gap-1.5 text-slate-300 font-sans font-bold">
+                <Star className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
+                <span>勇者レベル調整 (自動設定デモ)</span>
+              </div>
+              <div className="flex gap-1.5">
+                <button
+                  onClick={() => sceneRef.current?.addLevel()}
+                  className="bg-amber-600 hover:bg-amber-500 active:bg-amber-700 text-white font-bold py-1 px-2.5 rounded transition-colors"
+                >
+                  Lv +1
+                </button>
+                <button
+                  onClick={() => {
+                    sceneRef.current?.resetHero();
+                    setDisplayMode('text');
+                    setSpeed(1000);
+                    setAllow8Way(false);
+                    setIsHd2d(false);
+                    setUseGrassBg(true);
+                  }}
+                  className="bg-slate-700 hover:bg-slate-600 active:bg-slate-800 text-slate-200 py-1 px-2 rounded transition-colors"
+                >
+                  リセット
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       
@@ -387,19 +484,7 @@ export const PhaserGameContainer: React.FC = () => {
             </button>
 
             <button
-              onClick={toggleTextMode}
-              className={`flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl border text-xs font-medium transition-colors ${
-                isTextMode 
-                  ? 'bg-slate-800 border-slate-900 text-white font-semibold' 
-                  : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
-              }`}
-            >
-              <Eye className="w-3.5 h-3.5" />
-              {isTextMode ? 'Text Mode ON' : 'Text Mode OFF'}
-            </button>
-
-            <button
-              onClick={() => setShowSpritesheetModal(true)}
+              onClick={openSpritesheetModal}
               className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 text-xs font-medium transition-colors"
             >
               <ImageIcon className="w-3.5 h-3.5" />
@@ -413,6 +498,100 @@ export const PhaserGameContainer: React.FC = () => {
               <RotateCcw className="w-3.5 h-3.5" />
               Center
             </button>
+
+            {/* Display Mode Selector */}
+            <div className="col-span-2 flex flex-col gap-1.5 bg-slate-50 p-2.5 rounded-xl border border-slate-200/80">
+              <span className="text-[10px] font-semibold text-slate-400 tracking-wider uppercase font-sans">Display Mode</span>
+              <div className="flex bg-white rounded-lg border border-slate-200/60 overflow-hidden text-xs font-medium p-0.5">
+                <button
+                  onClick={() => handleDisplayModeChange('normal')}
+                  className={`flex-1 py-1.5 px-2 flex items-center justify-center gap-1 rounded-md transition-all ${
+                    displayMode === 'normal'
+                      ? 'bg-emerald-600 text-white shadow-sm font-semibold'
+                      : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                  }`}
+                >
+                  <Sparkles className="w-3 h-3 text-amber-400" />
+                  HD-2D
+                </button>
+                <button
+                  onClick={() => handleDisplayModeChange('grayscale')}
+                  className={`flex-1 py-1.5 px-2 flex items-center justify-center gap-1 rounded-md transition-all ${
+                    displayMode === 'grayscale'
+                      ? 'bg-slate-700 text-white shadow-sm font-semibold'
+                      : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                  }`}
+                >
+                  <Eye className="w-3 h-3" />
+                  Gray 32x32
+                </button>
+                <button
+                  onClick={() => handleDisplayModeChange('text')}
+                  className={`flex-1 py-1.5 px-2 flex items-center justify-center gap-1 rounded-md transition-all ${
+                    displayMode === 'text'
+                      ? 'bg-slate-900 text-white shadow-sm font-semibold'
+                      : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                  }`}
+                >
+                  <Eye className="w-3 h-3" />
+                  Text
+                </button>
+              </div>
+            </div>
+
+            {/* レベル別デモコントローラー */}
+            <div className="col-span-2 flex flex-col gap-2.5 bg-amber-50/50 p-3.5 rounded-xl border border-amber-200/60 mt-1">
+              <span className="text-[10px] font-bold text-amber-700 tracking-wider uppercase font-sans flex items-center gap-1">
+                <Star className="w-3 h-3 text-amber-500 fill-amber-500" />
+                Demo Auto-Switch (レベル自動切替デモ)
+              </span>
+              <p className="text-[11px] text-slate-500 leading-normal">
+                レベルアップに伴い、画質・速度・移動方向・エフェクトが段階的に自動解放されるデモ機能です。（手動での切り替えも自由に行えます）
+              </p>
+              
+              <div className="flex gap-2 mt-1">
+                <button
+                  onClick={() => sceneRef.current?.addLevel()}
+                  className="flex-1 bg-amber-600 hover:bg-amber-505 active:bg-amber-700 hover:bg-amber-500 text-white font-bold py-2 px-3 rounded-lg text-xs transition-all shadow-sm flex items-center justify-center gap-1"
+                >
+                  <Star className="w-3.5 h-3.5 text-amber-200" />
+                  Lv UP (+1) [現在のLv: {heroState.level}]
+                </button>
+                <button
+                  onClick={() => {
+                    sceneRef.current?.resetHero();
+                    setDisplayMode('text');
+                    setSpeed(1000);
+                    setAllow8Way(false);
+                    setIsHd2d(false);
+                    setUseGrassBg(true);
+                  }}
+                  className="bg-slate-200 hover:bg-slate-300 active:bg-slate-400 text-slate-700 font-semibold py-2 px-3 rounded-lg text-xs transition-colors flex items-center justify-center gap-1"
+                >
+                  <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
+                  Reset to Lv.1
+                </button>
+              </div>
+
+              <div className="text-[10px] text-slate-500 flex flex-col gap-1 mt-1 bg-white/75 p-2.5 rounded-lg border border-slate-200/60 font-sans">
+                <div className={`flex justify-between items-center px-1.5 py-0.5 rounded ${heroState.level >= 1 && heroState.level < 3 ? "bg-amber-100 text-amber-900 font-bold" : "text-slate-400"}`}>
+                  <span>・Lv.1〜2: Text / 1000ms / 4方向 / FXオフ</span>
+                  {heroState.level >= 1 && heroState.level < 3 && <span className="text-[9px] bg-amber-600 text-white px-1 rounded">現在</span>}
+                </div>
+                <div className={`flex justify-between items-center px-1.5 py-0.5 rounded ${heroState.level >= 3 && heroState.level < 6 ? "bg-amber-100 text-amber-900 font-bold" : "text-slate-400"}`}>
+                  <span>・Lv.3〜5: Gray 32x32 / 800ms / 4方向</span>
+                  {heroState.level >= 3 && heroState.level < 6 && <span className="text-[9px] bg-amber-600 text-white px-1 rounded">現在</span>}
+                </div>
+                <div className={`flex justify-between items-center px-1.5 py-0.5 rounded ${heroState.level >= 6 && heroState.level < 8 ? "bg-amber-100 text-amber-900 font-bold" : "text-slate-400"}`}>
+                  <span>・Lv.6〜7: HD-2D / GrassBGオフ</span>
+                  {heroState.level >= 6 && heroState.level < 8 && <span className="text-[9px] bg-amber-600 text-white px-1 rounded">現在</span>}
+                </div>
+                <div className={`flex justify-between items-center px-1.5 py-0.5 rounded ${heroState.level >= 8 ? "bg-amber-100 text-amber-900 font-bold" : "text-slate-400"}`}>
+                  <span>・Lv.8〜: HD-2D / 450ms / 8方向 / FX & GrassBGオン</span>
+                  {heroState.level >= 8 && <span className="text-[9px] bg-amber-600 text-white px-1 rounded">現在</span>}
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>

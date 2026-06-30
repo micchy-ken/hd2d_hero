@@ -9,8 +9,11 @@ import Phaser from 'phaser';
  * 2: Left (左向き)
  * 3: Right (右向き)
  */
-export function generateHeroSpritesheet(scene: Phaser.Scene, isTextMode: boolean = false): string {
-  const textureKey = isTextMode ? 'hero_spritesheet_text' : 'hero_spritesheet';
+export function generateHeroSpritesheet(scene: Phaser.Scene, mode: 'normal' | 'text' | 'grayscale' | boolean = 'normal'): string {
+  const resolvedMode = mode === true ? 'text' : (mode === false ? 'normal' : mode);
+  const textureKey = resolvedMode === 'text' 
+    ? 'hero_spritesheet_text' 
+    : (resolvedMode === 'grayscale' ? 'hero_spritesheet_gray' : 'hero_spritesheet');
 
   if (scene.textures.exists(textureKey)) {
     // If it exists, just return the key
@@ -29,7 +32,105 @@ export function generateHeroSpritesheet(scene: Phaser.Scene, isTextMode: boolean
 
   ctx.imageSmoothingEnabled = false;
 
-  if (isTextMode) {
+  if (resolvedMode === 'grayscale') {
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = 32;
+    tempCanvas.height = 32;
+    const tCtx = tempCanvas.getContext('2d')!;
+    tCtx.imageSmoothingEnabled = false;
+
+    const gp = (x: number, y: number, w: number, h: number, color: string) => {
+      tCtx.fillStyle = color;
+      tCtx.fillRect(x, y, w, h);
+    };
+
+    for (let dir = 0; dir < rows; dir++) {
+      for (let frame = 0; frame < cols; frame++) {
+        const ox = frame * frameWidth;
+        const oy = dir * frameHeight;
+
+        tCtx.clearRect(0, 0, 32, 32);
+
+        const isStep1 = frame === 1;
+        const isStep2 = frame === 3;
+        const bobY = (isStep1 || isStep2) ? -1 : 0;
+        const legOffset = isStep1 ? 1 : (isStep2 ? -1 : 0);
+
+        tCtx.save();
+        tCtx.translate(0, bobY);
+
+        // Floor shadow
+        tCtx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+        tCtx.beginPath();
+        tCtx.ellipse(16, 29, 7, 2, 0, 0, Math.PI * 2);
+        tCtx.fill();
+
+        if (dir === 0) { // DOWN (Front)
+          gp(10, 14, 12, 10, '#444444');
+          gp(12, 24 + (legOffset > 0 ? -1 : 0), 3, 5, '#444444');
+          gp(17, 24 + (legOffset < 0 ? -1 : 0), 3, 5, '#444444');
+          gp(11, 14, 10, 10, '#888888');
+          gp(13, 15, 6, 8, '#dddddd');
+          gp(14, 23, 4, 2, '#444444');
+          gp(12, 6, 8, 8, '#888888');
+          gp(13, 7, 6, 6, '#dddddd');
+          gp(11, 5, 10, 2, '#dddddd');
+          gp(14, 9, 1, 1, '#000000');
+          gp(17, 9, 1, 1, '#000000');
+          gp(15, 3, 2, 2, '#ffffff');
+          const shY = 15 + (isStep1 ? -1 : 0);
+          gp(7, shY, 4, 6, '#dddddd');
+          gp(8, shY + 1, 2, 4, '#444444');
+          gp(7, shY + 2, 4, 1, '#ffffff');
+          gp(8, shY, 1, 6, '#ffffff');
+          const swY = 12 + (isStep2 ? -2 : 0);
+          gp(21, swY + 6, 1, 4, '#dddddd');
+          gp(21, swY + 5, 1, 1, '#ffffff');
+          gp(20, swY + 9, 3, 1, '#444444');
+          gp(21, swY + 10, 1, 2, '#000000');
+        } else if (dir === 1) { // UP (Back)
+          gp(9, 13, 14, 14, '#444444');
+          gp(11, 15, 10, 12, '#888888');
+          gp(12, 24 + (legOffset < 0 ? -1 : 0), 3, 5, '#444444');
+          gp(17, 24 + (legOffset > 0 ? -1 : 0), 3, 5, '#444444');
+          gp(12, 6, 8, 8, '#444444');
+          gp(11, 5, 10, 2, '#888888');
+          gp(14, 3, 4, 3, '#dddddd');
+        } else if (dir === 2) { // LEFT
+          gp(18, 14, 6, 11, '#444444');
+          gp(13, 24, 3, 5, '#444444');
+          gp(16, 24, 3, 5, '#888888');
+          gp(12, 14, 7, 10, '#888888');
+          gp(13, 15, 4, 8, '#dddddd');
+          gp(13, 6, 7, 8, '#888888');
+          gp(12, 8, 2, 2, '#dddddd');
+          gp(14, 9, 1, 1, '#000000');
+          const shY = 14 + (isStep1 ? -1 : 0);
+          gp(9, shY, 4, 7, '#dddddd');
+          gp(10, shY + 1, 2, 5, '#444444');
+          gp(9, shY + 3, 4, 1, '#ffffff');
+        } else if (dir === 3) { // RIGHT
+          gp(8, 14, 6, 11, '#444444');
+          gp(13, 24, 3, 5, '#888888');
+          gp(16, 24, 3, 5, '#444444');
+          gp(13, 14, 7, 10, '#888888');
+          gp(15, 15, 4, 8, '#dddddd');
+          gp(12, 6, 7, 8, '#888888');
+          gp(18, 8, 2, 2, '#dddddd');
+          gp(17, 9, 1, 1, '#000000');
+          const swY = 12 + (isStep2 ? -1 : 0);
+          gp(19, swY + 5, 6, 2, '#ffffff');
+          gp(18, swY + 4, 1, 4, '#444444');
+          gp(16, swY + 5, 2, 1, '#000000');
+        }
+
+        tCtx.restore();
+
+        // Upscale 2x
+        ctx.drawImage(tempCanvas, 0, 0, 32, 32, ox, oy, 64, 64);
+      }
+    }
+  } else if (resolvedMode === 'text') {
     ctx.fillStyle = '#ffffff';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';

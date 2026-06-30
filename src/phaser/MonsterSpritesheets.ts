@@ -1,7 +1,10 @@
 import Phaser from 'phaser';
 
-export function generateSlimeSpritesheet(scene: Phaser.Scene, isTextMode: boolean = false): string {
-  const textureKey = isTextMode ? 'slime_spritesheet_text' : 'slime_spritesheet';
+export function generateSlimeSpritesheet(scene: Phaser.Scene, mode: 'normal' | 'text' | 'grayscale' | boolean = 'normal'): string {
+  const resolvedMode = mode === true ? 'text' : (mode === false ? 'normal' : mode);
+  const textureKey = resolvedMode === 'text' 
+    ? 'slime_spritesheet_text' 
+    : (resolvedMode === 'grayscale' ? 'slime_spritesheet_gray' : 'slime_spritesheet');
 
   if (scene.textures.exists(textureKey)) {
     return textureKey;
@@ -18,7 +21,89 @@ export function generateSlimeSpritesheet(scene: Phaser.Scene, isTextMode: boolea
 
   ctx.imageSmoothingEnabled = false;
 
-  if (isTextMode) {
+  if (resolvedMode === 'grayscale') {
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = 32;
+    tempCanvas.height = 32;
+    const tCtx = tempCanvas.getContext('2d')!;
+    tCtx.imageSmoothingEnabled = false;
+
+    const gp = (x: number, y: number, w: number, h: number, color: string) => {
+      tCtx.fillStyle = color;
+      tCtx.fillRect(x, y, w, h);
+    };
+
+    for (let frame = 0; frame < frames; frame++) {
+      const ox = frame * frameWidth;
+
+      tCtx.clearRect(0, 0, 32, 32);
+
+      tCtx.save();
+      
+      let scaleX = 1;
+      let scaleY = 1;
+      let offsetY = 0;
+
+      if (frame === 1) { // 縮む
+        scaleX = 1.2;
+        scaleY = 0.8;
+        offsetY = 3;
+      } else if (frame === 2) { // 伸びる
+        scaleX = 0.8;
+        scaleY = 1.2;
+        offsetY = -1;
+      } else if (frame === 3) { // ジャンプ
+        scaleX = 0.9;
+        scaleY = 1.1;
+        offsetY = -4;
+      }
+
+      tCtx.translate(16, 26); // Base of slime
+      tCtx.scale(scaleX, scaleY);
+      tCtx.translate(-16, -26 + offsetY);
+
+      // Shadow on floor
+      if (frame !== 3) {
+        tCtx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+        tCtx.beginPath();
+        tCtx.ellipse(16, 27, 8, 2, 0, 0, Math.PI * 2);
+        tCtx.fill();
+      } else {
+        tCtx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+        tCtx.beginPath();
+        tCtx.ellipse(16, 29, 5, 1, 0, 0, Math.PI * 2);
+        tCtx.fill();
+      }
+
+      // Slime Body Outline
+      gp(12, 14, 8, 12, '#444444');
+      gp(10, 16, 12, 10, '#444444');
+      gp(8, 19, 16, 7, '#444444');
+
+      // Inner body
+      gp(13, 15, 6, 10, '#888888');
+      gp(11, 17, 10, 8, '#888888');
+      gp(9, 20, 14, 5, '#888888');
+
+      gp(14, 16, 4, 8, '#dddddd');
+      gp(12, 18, 8, 6, '#dddddd');
+      gp(10, 21, 12, 3, '#dddddd');
+
+      // Eyes
+      gp(12, 19, 1, 2, '#000000');
+      gp(19, 19, 1, 2, '#000000');
+      gp(12, 19, 1, 1, '#ffffff'); // sparkle
+      gp(19, 19, 1, 1, '#ffffff');
+
+      // Mouth
+      gp(15, 22, 2, 1, '#000000');
+
+      tCtx.restore();
+
+      // Upscale 2x
+      ctx.drawImage(tempCanvas, 0, 0, 32, 32, ox, 0, 64, 64);
+    }
+  } else if (resolvedMode === 'text') {
     ctx.fillStyle = '#ffffff'; // 白文字で「敵」
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';

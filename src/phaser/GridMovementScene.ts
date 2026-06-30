@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { generateHeroSpritesheet } from './HeroSpritesheet';
 import { generateSlimeSpritesheet } from './MonsterSpritesheets';
-import grassBgUrl from '../../public/grass_bg_1782776475818.jpg';
+const grassBgUrl = '/grass_bg_1782776475818.jpg';
 
 export type Direction = 'up' | 'down' | 'left' | 'right' | 'up-left' | 'up-right' | 'down-left' | 'down-right' | 'idle';
 
@@ -54,8 +54,9 @@ export class GridMovementScene extends Phaser.Scene {
   private particleMotes!: Phaser.GameObjects.Arc[];
   private grassBgImage?: Phaser.GameObjects.Image;
   private useGrassBg: boolean = true;
-  private allow8Way: boolean = true;
-  private isTextMode: boolean = false;
+  private allow8Way: boolean = false;
+  private isTextMode: boolean = true;
+  private displayMode: 'normal' | 'text' | 'grayscale' = 'text';
   private slimes: SlimeData[] = [];
 
   // 状態管理
@@ -69,10 +70,10 @@ export class GridMovementScene extends Phaser.Scene {
   private currentDirection: Direction = 'idle';
   
   // 設定
-  private moveSpeedMs: number = 450; // 1グリッド移動にかかる時間(ms)
+  private moveSpeedMs: number = 1000; // 1グリッド移動にかかる時間(ms)
   private autoMode: 'none' | 'random' | 'seek' = 'seek';
   private showGridLines: boolean = true;
-  private isHd2dEffectsEnabled: boolean = true;
+  private isHd2dEffectsEnabled: boolean = false;
 
   // ヒーローステータス
   private heroHp: number = 20;
@@ -113,7 +114,7 @@ export class GridMovementScene extends Phaser.Scene {
     this.onLogCallback = callback;
   }
 
-  private sendLog(message: string, type: ActionLog['type'] = 'info') {
+  public sendLog(message: string, type: ActionLog['type'] = 'info') {
     if (this.onLogCallback) {
       this.onLogCallback({
         id: Math.random().toString(36).substring(2, 9),
@@ -125,10 +126,12 @@ export class GridMovementScene extends Phaser.Scene {
 
   preload() {
     this.load.image('grass_bg', grassBgUrl);
-    generateHeroSpritesheet(this, false);
-    generateHeroSpritesheet(this, true);
-    generateSlimeSpritesheet(this, false);
-    generateSlimeSpritesheet(this, true);
+    generateHeroSpritesheet(this, 'normal');
+    generateHeroSpritesheet(this, 'text');
+    generateHeroSpritesheet(this, 'grayscale');
+    generateSlimeSpritesheet(this, 'normal');
+    generateSlimeSpritesheet(this, 'text');
+    generateSlimeSpritesheet(this, 'grayscale');
   }
 
   create() {
@@ -198,6 +201,23 @@ export class GridMovementScene extends Phaser.Scene {
         frames: [{ key: 'hero_spritesheet_text', frame: startFrame }],
         frameRate: 1
       });
+
+      // grayscale mode textures
+      this.anims.create({
+        key: `walk-${key}-gray`,
+        frames: this.anims.generateFrameNumbers('hero_spritesheet_gray', {
+          start: startFrame,
+          end: startFrame + 3
+        }),
+        frameRate: 8,
+        repeat: -1
+      });
+
+      this.anims.create({
+        key: `idle-${key}-gray`,
+        frames: [{ key: 'hero_spritesheet_gray', frame: startFrame }],
+        frameRate: 1
+      });
     });
 
     // スライムのアニメーション
@@ -233,6 +253,24 @@ export class GridMovementScene extends Phaser.Scene {
     this.anims.create({
       key: 'slime-jump-text',
       frames: [{ key: 'slime_spritesheet_text', frame: 3 }],
+      frameRate: 1
+    });
+
+    // スライムのアニメーション (grayscale mode)
+    this.anims.create({
+      key: 'slime-idle-gray',
+      frames: [{ key: 'slime_spritesheet_gray', frame: 0 }],
+      frameRate: 1
+    });
+    this.anims.create({
+      key: 'slime-shake-gray',
+      frames: this.anims.generateFrameNumbers('slime_spritesheet_gray', { start: 1, end: 2 }),
+      frameRate: 12,
+      repeat: -1
+    });
+    this.anims.create({
+      key: 'slime-jump-gray',
+      frames: [{ key: 'slime_spritesheet_gray', frame: 3 }],
       frameRate: 1
     });
 
@@ -324,6 +362,10 @@ export class GridMovementScene extends Phaser.Scene {
       callbackScope: this,
       loop: true
     });
+
+    // 初期表示設定の適用
+    this.setDisplayMode(this.displayMode);
+    this.toggleHd2dEffects(this.isHd2dEffectsEnabled);
   }
 
   public update(time: number, delta: number) {
@@ -413,12 +455,54 @@ export class GridMovementScene extends Phaser.Scene {
     this.gridGraphics.clear();
 
     if (this.grassBgImage) {
-      this.grassBgImage.setVisible(this.isTextMode ? false : this.useGrassBg);
+      this.grassBgImage.setVisible(this.displayMode === 'normal' && this.useGrassBg);
     }
 
-    if (this.isTextMode) {
+    if (this.displayMode === 'text') {
       if (this.showGridLines) {
         this.gridGraphics.lineStyle(1, 0xffffff, 0.3);
+        for (let i = 0; i <= GRID_ROWS; i++) {
+          this.gridGraphics.moveTo(0, i * GRID_SIZE);
+          this.gridGraphics.lineTo(GRID_COLS * GRID_SIZE, i * GRID_SIZE);
+        }
+        for (let i = 0; i <= GRID_COLS; i++) {
+          this.gridGraphics.moveTo(i * GRID_SIZE, 0);
+          this.gridGraphics.lineTo(i * GRID_SIZE, GRID_ROWS * GRID_SIZE);
+        }
+        this.gridGraphics.strokePath();
+      }
+      return;
+    }
+
+    if (this.displayMode === 'grayscale') {
+      // Background is white
+      this.gridGraphics.fillStyle(0xffffff, 1);
+      this.gridGraphics.fillRect(0, 0, GRID_COLS * GRID_SIZE, GRID_ROWS * GRID_SIZE);
+
+      // Draw occasional stones
+      for (let row = 0; row < GRID_ROWS; row++) {
+        for (let col = 0; col < GRID_COLS; col++) {
+          const landmarkHash = (row * 37 + col * 17) % 13;
+          if (landmarkHash === 4 || landmarkHash === 8) {
+            const ox = col * GRID_SIZE + 24;
+            const oy = row * GRID_SIZE + 24;
+            // Stone Outline
+            this.gridGraphics.fillStyle(0x444444, 1);
+            this.gridGraphics.fillRect(ox, oy, 12, 8);
+            this.gridGraphics.fillRect(ox + 2, oy - 2, 8, 12);
+            // Stone Body
+            this.gridGraphics.fillStyle(0x888888, 1);
+            this.gridGraphics.fillRect(ox + 2, oy, 8, 6);
+            this.gridGraphics.fillRect(ox + 4, oy - 1, 4, 8);
+            // Highlight
+            this.gridGraphics.fillStyle(0xdddddd, 1);
+            this.gridGraphics.fillRect(ox + 4, oy, 2, 2);
+          }
+        }
+      }
+
+      if (this.showGridLines) {
+        this.gridGraphics.lineStyle(1, 0xcccccc, 0.7);
         for (let i = 0; i <= GRID_ROWS; i++) {
           this.gridGraphics.moveTo(0, i * GRID_SIZE);
           this.gridGraphics.lineTo(GRID_COLS * GRID_SIZE, i * GRID_SIZE);
@@ -536,26 +620,62 @@ export class GridMovementScene extends Phaser.Scene {
   }
 
   private getAnimKey(baseKey: string): string {
-    return this.isTextMode ? `${baseKey}-text` : baseKey;
+    if (this.displayMode === 'text') {
+      return `${baseKey}-text`;
+    } else if (this.displayMode === 'grayscale') {
+      return `${baseKey}-gray`;
+    }
+    return baseKey;
   }
 
   public toggleTextMode(enabled?: boolean) {
-    this.isTextMode = enabled !== undefined ? enabled : !this.isTextMode;
+    const nextMode = (enabled !== undefined ? enabled : !this.isTextMode) ? 'text' : 'normal';
+    this.setDisplayMode(nextMode);
+  }
+
+  public setDisplayMode(mode: 'normal' | 'text' | 'grayscale') {
+    this.displayMode = mode;
+    this.isTextMode = (mode === 'text');
     
     // 背景色の変更
-    if (this.isTextMode) {
+    if (this.displayMode === 'text') {
       this.cameras.main.setBackgroundColor('#000000');
+    } else if (this.displayMode === 'grayscale') {
+      this.cameras.main.setBackgroundColor('#ffffff');
     } else {
-      this.cameras.main.setBackgroundColor('#ecfdf5'); // default background color from container
+      this.cameras.main.setBackgroundColor('#ecfdf5'); // default background color
     }
 
     // テクスチャの変更
-    const heroTexture = this.isTextMode ? 'hero_spritesheet_text' : 'hero_spritesheet';
+    let heroTexture = 'hero_spritesheet';
+    if (this.displayMode === 'text') heroTexture = 'hero_spritesheet_text';
+    else if (this.displayMode === 'grayscale') heroTexture = 'hero_spritesheet_gray';
     this.hero.setTexture(heroTexture);
     
-    const slimeTexture = this.isTextMode ? 'slime_spritesheet_text' : 'slime_spritesheet';
+    let slimeTexture = 'slime_spritesheet';
+    if (this.displayMode === 'text') slimeTexture = 'slime_spritesheet_text';
+    else if (this.displayMode === 'grayscale') slimeTexture = 'slime_spritesheet_gray';
     this.slimes.forEach(slime => {
       slime.sprite.setTexture(slimeTexture);
+    });
+
+    // アニメーションを即時更新
+    const currentAnimKey = this.hero.anims.currentAnim?.key;
+    if (currentAnimKey) {
+      let baseKey = currentAnimKey;
+      if (baseKey.endsWith('-text')) baseKey = baseKey.replace('-text', '');
+      else if (baseKey.endsWith('-gray')) baseKey = baseKey.replace('-gray', '');
+      this.hero.play(this.getAnimKey(baseKey), true);
+    }
+
+    this.slimes.forEach(slime => {
+      const sAnimKey = slime.sprite.anims.currentAnim?.key;
+      if (sAnimKey) {
+        let baseKey = sAnimKey;
+        if (baseKey.endsWith('-text')) baseKey = baseKey.replace('-text', '');
+        else if (baseKey.endsWith('-gray')) baseKey = baseKey.replace('-gray', '');
+        slime.sprite.play(this.getAnimKey(baseKey), true);
+      }
     });
 
     // 描画の更新
@@ -592,10 +712,12 @@ export class GridMovementScene extends Phaser.Scene {
     this.moveSpeedMs = speedMs;
     const frameRate = Math.max(4, Math.round(3600 / speedMs));
     ['up', 'down', 'left', 'right'].forEach(dir => {
-      const anim = this.anims.get(`walk-${dir}`);
-      if (anim) {
-        anim.frameRate = frameRate;
-      }
+      ['', '-text', '-gray'].forEach(suffix => {
+        const anim = this.anims.get(`walk-${dir}${suffix}`);
+        if (anim) {
+          anim.frameRate = frameRate;
+        }
+      });
     });
   }
 
@@ -1146,5 +1268,25 @@ export class GridMovementScene extends Phaser.Scene {
     this.hero.play(this.getAnimKey('idle-down'));
     this.currentDirection = 'idle';
     this.notifyStateChange(false);
+  }
+
+  public addLevel() {
+    this.heroLevel++;
+    this.heroMaxHp += 5;
+    this.heroHp = this.heroMaxHp;
+    this.heroAttack += 2;
+    this.heroExp = 0;
+    this.sendLog(`[Demo] Leveled up! You are now level ${this.heroLevel}.`, 'system');
+    this.notifyStateChange();
+  }
+
+  public resetHero() {
+    this.heroLevel = 1;
+    this.heroMaxHp = 20;
+    this.heroHp = 20;
+    this.heroAttack = 5;
+    this.heroExp = 0;
+    this.sendLog(`[Demo] Status reset to Level 1.`, 'system');
+    this.notifyStateChange();
   }
 }
