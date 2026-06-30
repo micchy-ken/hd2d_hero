@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { generateHeroSpritesheet } from './HeroSpritesheet';
 import { generateSlimeSpritesheet } from './MonsterSpritesheets';
+import grassBgUrl from '../../public/grass_bg_1782776475818.jpg';
 
 export type Direction = 'up' | 'down' | 'left' | 'right' | 'up-left' | 'up-right' | 'down-left' | 'down-right' | 'idle';
 
@@ -123,7 +124,7 @@ export class GridMovementScene extends Phaser.Scene {
   }
 
   preload() {
-    this.load.image('grass_bg', import.meta.env.BASE_URL + 'grass_bg_1782776475818.jpg');
+    this.load.image('grass_bg', grassBgUrl);
     generateHeroSpritesheet(this, false);
     generateHeroSpritesheet(this, true);
     generateSlimeSpritesheet(this, false);
